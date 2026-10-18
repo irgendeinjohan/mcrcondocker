@@ -30,8 +30,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function defaultWebRoot(): string | undefined {
   const here = path.dirname(fileURLToPath(import.meta.url));
+  // dist/server → dist/web; bei tsx (src/server) → dist/web. src/web (Quellen) hat keinen assets-Ordner.
   for (const c of [path.resolve(here, "../web"), path.resolve(here, "../../dist/web"), path.resolve("dist/web")]) {
-    if (existsSync(path.join(c, "index.html"))) return c;
+    if (existsSync(path.join(c, "index.html")) && existsSync(path.join(c, "assets"))) return c;
   }
   return undefined;
 }

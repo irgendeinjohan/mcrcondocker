@@ -184,6 +184,8 @@ export class Poller extends EventEmitter {
   /** Ein Abfragezyklus. */
   async cycle(): Promise<void> {
     if (this.rcon.state !== "connected") {
+      // Erster Verbindungsaufbau: abwarten (nach "connected" wird sofort abgefragt)
+      if (this.rcon.state === "connecting" && !this.rcon.lastError) return;
       this.handleRconError(new RconError(this.rcon.lastError ?? "Keine RCON-Verbindung", "not_connected"));
       return;
     }

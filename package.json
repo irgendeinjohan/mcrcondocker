@@ -28,6 +28,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^24.0.0",
     "concurrently": "^9.0.0",
+    "playwright-core": "^1.56.1",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.7",
     "tsx": "^4.23.15",
