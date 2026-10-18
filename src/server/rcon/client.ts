@@ -86,6 +86,7 @@ export class RconClient extends EventEmitter {
   private connectTimer: NodeJS.Timeout | null = null;
   private _state: RconState = "disconnected";
   private _lastError: string | null = null;
+  private _sentCount = 0;
   private readonly opts: Required<RconOptions>;
 
   constructor(options: RconOptions) {
@@ -106,6 +107,11 @@ export class RconClient extends EventEmitter {
 
   get lastError(): string | null {
     return this._lastError;
+  }
+
+  /** Anzahl gesendeter Befehle seit Start */
+  get sentCount(): number {
+    return this._sentCount;
   }
 
   get queueLength(): number {
@@ -292,6 +298,7 @@ export class RconClient extends EventEmitter {
       timer,
     };
     // Der Marker folgt erst nach dem ersten Antwortfragment (siehe handlePacket).
+    this._sentCount++;
     socket.write(encodePacket(commandId, PacketType.EXEC_COMMAND, job.command));
   }
 
@@ -360,6 +367,7 @@ function describeSocketError(err: NodeJS.ErrnoException): string {
     case "ENETUNREACH":
       return "Host nicht erreichbar";
     default:
-      return `Verbindungsfehler (${err.code ?? err.message})`;
+      // bewusst ohne err.message: die enthält Host und Port, die nicht ins Frontend sollen
+      return `Verbindungsfehler (${err.code ?? "unbekannt"})`;
   }
 }

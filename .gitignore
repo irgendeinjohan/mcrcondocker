@@ -8,3 +8,4 @@ coverage/
 /scripts/testserver/mcdata/
 /test-results/
 /playwright-report/
+data-mock/

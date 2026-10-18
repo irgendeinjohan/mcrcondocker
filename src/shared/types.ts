@@ -191,5 +191,4 @@ export interface DiagnosticsSnapshot {
 export type LiveEvent =
   | { type: "status"; status: ServerStatus }
   | { type: "players"; players: PlayerSummary[] }
-  | { type: "player"; player: PlayerDetail }
   | { type: "console"; entry: ConsoleEntry };

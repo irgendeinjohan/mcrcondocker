@@ -9,9 +9,9 @@
   },
   "scripts": {
     "dev": "concurrently -k -n server,web \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "tsx watch --env-file-if-exists=.env src/server/index.ts",
+    "dev:server": "tsx watch --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/server/index.ts",
     "dev:web": "vite",
-    "mock": "MOCK=true DASHBOARD_PASSWORD=mock tsx src/server/index.ts",
+    "mock": "MOCK=true tsx --disable-warning=ExperimentalWarning src/server/index.ts",
     "build": "npm run build:web && npm run build:server",
     "build:web": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
