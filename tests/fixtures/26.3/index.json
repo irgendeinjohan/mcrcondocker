@@ -2,14 +2,14 @@
   "list-empty": {
     "command": "list",
     "fragments": 1,
-    "bytes": 77,
-    "capturedAt": "2026-10-18T19:54:03.238Z"
+    "bytes": 43,
+    "capturedAt": "2026-10-18T20:02:33.277Z"
   },
   "list-uuids-empty": {
     "command": "list uuids",
     "fragments": 1,
-    "bytes": 194,
-    "capturedAt": "2026-10-18T19:54:03.241Z"
+    "bytes": 43,
+    "capturedAt": "2026-10-18T20:02:33.283Z"
   },
   "tps": {
     "command": "tps",

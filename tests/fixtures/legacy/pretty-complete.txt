@@ -1,0 +1,1 @@
+Alex has the following entity data: {Pos: [1.5d, 64.0d, -3.25d], Dimension: "minecraft:overworld", Health: 18.0f, foodLevel: 20, XpLevel: 3, Inventory: [{Slot: 0b, id: "minecraft:stone", count: 12}], equipment: {head: {id: "minecraft:iron_helmet", count: 1}}, Name: 'Ein "Zitat"'}

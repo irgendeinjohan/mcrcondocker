@@ -179,6 +179,12 @@ else if (scenario === "players") {
   for (const m of list.body.matchAll(/(?:: |, )(.+?) \(([0-9a-f-]{36})\)/g)) uuids[m[1]!] = m[2]!;
   console.log("Spieler:", uuids);
   steps = playerSteps(uuids);
+} else if (scenario === "custom") {
+  // einzelne Fixtures: … custom name1="befehl 1" name2="befehl 2"
+  steps = process.argv.slice(4).map((arg) => {
+    const i = arg.indexOf("=");
+    return { save: arg.slice(0, i), cmd: arg.slice(i + 1) };
+  });
 } else throw new Error("unbekanntes Szenario " + scenario);
 for (const step of steps) {
   const r = await client.send(step.cmd);
