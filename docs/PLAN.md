@@ -50,12 +50,12 @@ Stand: 18.10.2026. Entwurf vor der Umsetzung. Annahmen sind mit **(A)** markiert
 Pro Intervall (Standard 5 s, einstellbar):
 
 1. `list uuids`: Online-Spieler mit UUID. Dafür reicht **ein** Befehl, und ab hier wird jeder Spieler über seine UUID angesprochen. So sind Bedrock-Namen mit Präfix oder Leerzeichen kein Problem. Der Namens-Parser arbeitet über das UUID-Muster `name (uuid)`, nicht über Leerzeichen oder Kommas.
-2. `data get entity <uuid>` je Online-Spieler: **ein** Befehl liefert alles (Pos, Dimension, Health, foodLevel, XpLevel, Inventory, EnderItems, equipment, Spielmodus …).
+2. `data modify storage mcdash:tmp s set string entity <uuid>` je Online-Spieler: **ein** Befehl liefert alles (Pos, Dimension, Health, foodLevel, XpLevel, Inventory, EnderItems, equipment, Spielmodus …). *Nachtrag aus Schritt 2:* `data get entity` wird über RCON nach ~32 Textstücken abgeschnitten. Der `string`-Umweg liefert das komplette SNBT in einer Fehlermeldung und schreibt nichts. Siehe [datenformat.md](datenformat.md).
 3. `tps` und `mspt` nur in jedem n-ten Zyklus (Standard: alle 30 s).
 
 Bei 5 Spielern sind das etwa 6 Befehle pro 5 s, eine vernachlässigbare Last. Kein Zyklus überlappt mit dem nächsten: Dauert ein Zyklus länger, beginnt der nächste erst danach.
 
-**Mehrteilige Antworten:** Nach jedem Befehl schicke ich ein „Marker-Paket“ (unbekannter Pakettyp). Der Server beantwortet Pakete der Reihe nach, also ist die Antwort auf den Marker das Ende-Signal. Alle Fragmente davor werden als Bytes zusammengefügt und erst dann als UTF-8 dekodiert, damit Umlaute und Emojis an Paketgrenzen nicht kaputtgehen. Ob Paper 26.3 genau so reagiert, prüfe ich am Testserver mit einer absichtlich riesigen Antwort (Truhe voller gefüllter Shulkerkisten).
+**Mehrteilige Antworten:** Nach dem **ersten** Antwortfragment schicke ich ein „Marker-Paket“ (unbekannter Pakettyp). Der Server schreibt alle Fragmente, bevor er das nächste Paket liest, also ist die Antwort auf den Marker das Ende-Signal. *Nachtrag:* Befehl und Marker dürfen nicht gleichzeitig unterwegs sein, sonst trennt der Server die Verbindung. Fragmente werden als Bytes zusammengefügt und erst dann als UTF-8 dekodiert. Am Testserver geprüft: 11 916 Bytes in 3 Paketen.
 
 **Warteschlange:** Konsolenbefehle haben Vorrang vor Poll-Befehlen. Jeder Befehl hat ein Timeout, danach wird die Verbindung neu aufgebaut. Reconnect mit exponentiellem Backoff (1 s → 2 → 4 … max. 60 s).
 

@@ -1,0 +1,2 @@
+Only players may be affected by this command, but the provided selector includes entities
+xp set 36532b5e-c442-3dbb-a24c-c7e55d0f979a 1 levels<--[HERE]

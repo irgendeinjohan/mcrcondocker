@@ -1,0 +1,1 @@
+Expected a value: got [{Slot:0b,components:{"minecraft:potion_contents":{potion:"minecraft:strong_healing"}},count:1,id:"minecraft:potion"},{Slot:26b,count:64,id:"minecraft:diamond_block"}]

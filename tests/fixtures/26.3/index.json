@@ -1,0 +1,260 @@
+{
+  "list-empty": {
+    "command": "list",
+    "fragments": 1,
+    "bytes": 77,
+    "capturedAt": "2026-10-18T19:54:03.238Z"
+  },
+  "list-uuids-empty": {
+    "command": "list uuids",
+    "fragments": 1,
+    "bytes": 194,
+    "capturedAt": "2026-10-18T19:54:03.241Z"
+  },
+  "tps": {
+    "command": "tps",
+    "fragments": 1,
+    "bytes": 62,
+    "capturedAt": "2026-10-18T19:54:03.259Z"
+  },
+  "mspt": {
+    "command": "mspt",
+    "fragments": 1,
+    "bytes": 197,
+    "capturedAt": "2026-10-18T19:54:03.281Z"
+  },
+  "block-chest-items": {
+    "command": "data get block 0 -59 0",
+    "fragments": 1,
+    "bytes": 87,
+    "capturedAt": "2026-10-18T19:54:03.523Z"
+  },
+  "block-chest-path-item0": {
+    "command": "data get block 0 -59 0 Items[0]",
+    "fragments": 1,
+    "bytes": 109,
+    "capturedAt": "2026-10-18T19:54:03.546Z"
+  },
+  "block-chest-large": {
+    "command": "data get block 3 -59 0",
+    "fragments": 1,
+    "bytes": 87,
+    "capturedAt": "2026-10-18T19:54:03.711Z"
+  },
+  "entity-armor-stand": {
+    "command": "data get entity @e[type=minecraft:armor_stand,tag=dash,limit=1]",
+    "fragments": 1,
+    "bytes": 143,
+    "capturedAt": "2026-10-18T19:54:03.828Z"
+  },
+  "entity-armor-stand-equipment": {
+    "command": "data get entity @e[type=minecraft:armor_stand,tag=dash,limit=1] equipment",
+    "fragments": 1,
+    "bytes": 130,
+    "capturedAt": "2026-10-18T19:54:03.835Z"
+  },
+  "error-no-such-path": {
+    "command": "data get entity @e[type=minecraft:armor_stand,tag=dash,limit=1] Foo",
+    "fragments": 1,
+    "bytes": 30,
+    "capturedAt": "2026-10-18T19:54:03.841Z"
+  },
+  "error-player-not-found": {
+    "command": "data get entity Nobody",
+    "fragments": 1,
+    "bytes": 19,
+    "capturedAt": "2026-10-18T19:54:03.844Z"
+  },
+  "error-uuid-not-found": {
+    "command": "data get entity 00000000-0000-0000-0009-01f5f0fa4c3b",
+    "fragments": 1,
+    "bytes": 19,
+    "capturedAt": "2026-10-18T19:54:03.846Z"
+  },
+  "error-not-loaded": {
+    "command": "data get block 9999 0 9999",
+    "fragments": 1,
+    "bytes": 27,
+    "capturedAt": "2026-10-18T19:54:03.847Z"
+  },
+  "error-not-block-entity": {
+    "command": "data get block 1 -59 1",
+    "fragments": 1,
+    "bytes": 38,
+    "capturedAt": "2026-10-18T19:54:03.848Z"
+  },
+  "error-unknown-command": {
+    "command": "thiscommanddoesnotexist",
+    "fragments": 1,
+    "bytes": 83,
+    "capturedAt": "2026-10-18T19:54:03.850Z"
+  },
+  "error-incomplete-command": {
+    "command": "data get entity",
+    "fragments": 1,
+    "bytes": 73,
+    "capturedAt": "2026-10-18T19:54:03.853Z"
+  },
+  "say": {
+    "command": "say Hallo aus RCON",
+    "fragments": 1,
+    "bytes": 0,
+    "capturedAt": "2026-10-18T19:54:03.891Z"
+  },
+  "time-query": {
+    "command": "time query gametime",
+    "fragments": 1,
+    "bytes": 30,
+    "capturedAt": "2026-10-18T19:54:03.956Z"
+  },
+  "list-3-players": {
+    "command": "list",
+    "fragments": 1,
+    "bytes": 77,
+    "capturedAt": "2026-10-18T19:50:34.703Z"
+  },
+  "list-uuids-3-players": {
+    "command": "list uuids",
+    "fragments": 1,
+    "bytes": 194,
+    "capturedAt": "2026-10-18T19:50:34.714Z"
+  },
+  "player-alex-string": {
+    "command": "data modify storage mcdash:tmp s set string entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a",
+    "fragments": 3,
+    "bytes": 8975,
+    "capturedAt": "2026-10-18T19:50:34.799Z"
+  },
+  "player-alex-pretty-truncated": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a",
+    "fragments": 1,
+    "bytes": 135,
+    "capturedAt": "2026-10-18T19:50:34.820Z"
+  },
+  "player-bedrock-string": {
+    "command": "data modify storage mcdash:tmp s set string entity 56200adf-8d4f-3ab8-a2f1-df8fa1001b8d",
+    "fragments": 1,
+    "bytes": 2307,
+    "capturedAt": "2026-10-18T19:50:34.867Z"
+  },
+  "player-bedrock-pretty-truncated": {
+    "command": "data get entity 56200adf-8d4f-3ab8-a2f1-df8fa1001b8d",
+    "fragments": 1,
+    "bytes": 147,
+    "capturedAt": "2026-10-18T19:50:34.942Z"
+  },
+  "player-steve-string": {
+    "command": "data modify storage mcdash:tmp s set string entity 65366474-7912-31ba-8ffe-0c2eab803f9e",
+    "fragments": 1,
+    "bytes": 1987,
+    "capturedAt": "2026-10-18T19:50:34.953Z"
+  },
+  "player-steve-pretty-truncated": {
+    "command": "data get entity 65366474-7912-31ba-8ffe-0c2eab803f9e",
+    "fragments": 1,
+    "bytes": 132,
+    "capturedAt": "2026-10-18T19:50:34.963Z"
+  },
+  "player-alex-path-pos": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a Pos",
+    "fragments": 1,
+    "bytes": 62,
+    "capturedAt": "2026-10-18T19:50:34.966Z"
+  },
+  "player-alex-path-dimension": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a Dimension",
+    "fragments": 1,
+    "bytes": 57,
+    "capturedAt": "2026-10-18T19:50:34.968Z"
+  },
+  "player-alex-path-health": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a Health",
+    "fragments": 1,
+    "bytes": 46,
+    "capturedAt": "2026-10-18T19:50:34.970Z"
+  },
+  "player-alex-path-food": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a foodLevel",
+    "fragments": 1,
+    "bytes": 38,
+    "capturedAt": "2026-10-18T19:50:34.972Z"
+  },
+  "player-alex-path-xplevel": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a XpLevel",
+    "fragments": 1,
+    "bytes": 38,
+    "capturedAt": "2026-10-18T19:50:34.978Z"
+  },
+  "player-alex-path-selected": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a SelectedItemSlot",
+    "fragments": 1,
+    "bytes": 37,
+    "capturedAt": "2026-10-18T19:50:34.994Z"
+  },
+  "player-alex-path-equipment-truncated": {
+    "command": "data get entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a equipment",
+    "fragments": 1,
+    "bytes": 121,
+    "capturedAt": "2026-10-18T19:50:34.996Z"
+  },
+  "player-alex-string-equipment": {
+    "command": "data modify storage mcdash:tmp s set string entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a equipment",
+    "fragments": 1,
+    "bytes": 637,
+    "capturedAt": "2026-10-18T19:50:35.000Z"
+  },
+  "player-alex-string-inventory": {
+    "command": "data modify storage mcdash:tmp s set string entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a Inventory",
+    "fragments": 1,
+    "bytes": 1854,
+    "capturedAt": "2026-10-18T19:50:35.004Z"
+  },
+  "player-alex-string-enderitems": {
+    "command": "data modify storage mcdash:tmp s set string entity 36532b5e-c442-3dbb-a24c-c7e55d0f979a EnderItems",
+    "fragments": 1,
+    "bytes": 189,
+    "capturedAt": "2026-10-18T19:50:35.009Z"
+  },
+  "storage-after": {
+    "command": "data get storage mcdash:tmp",
+    "fragments": 1,
+    "bytes": 49,
+    "capturedAt": "2026-10-18T19:50:35.012Z"
+  },
+  "error-xp-uuid-selector": {
+    "command": "xp set 36532b5e-c442-3dbb-a24c-c7e55d0f979a 1 levels",
+    "fragments": 1,
+    "bytes": 151,
+    "capturedAt": "2026-10-18T19:50:34.806Z"
+  },
+  "block-chest-items-string": {
+    "command": "data modify storage mcdash:tmp s set string block 0 -59 0",
+    "fragments": 1,
+    "bytes": 3549,
+    "capturedAt": "2026-10-18T19:54:03.555Z"
+  },
+  "block-chest-large-string": {
+    "command": "data modify storage mcdash:tmp s set string block 3 -59 0",
+    "fragments": 3,
+    "bytes": 11916,
+    "capturedAt": "2026-10-18T19:54:03.760Z"
+  },
+  "entity-armor-stand-string": {
+    "command": "data modify storage mcdash:tmp s set string entity @e[type=minecraft:armor_stand,tag=dash,limit=1]",
+    "fragments": 1,
+    "bytes": 1257,
+    "capturedAt": "2026-10-18T19:54:03.837Z"
+  },
+  "error-string-player-not-found": {
+    "command": "data modify storage mcdash:tmp s set string entity Nobody",
+    "fragments": 1,
+    "bytes": 19,
+    "capturedAt": "2026-10-18T19:54:03.844Z"
+  },
+  "storage-after-world": {
+    "command": "data get storage mcdash:tmp",
+    "fragments": 1,
+    "bytes": 49,
+    "capturedAt": "2026-10-18T19:54:03.974Z"
+  }
+}

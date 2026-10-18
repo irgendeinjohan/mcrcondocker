@@ -1,0 +1,1 @@
+Alex has the following entity data: [120.5d, -60.0d, -340.25d]

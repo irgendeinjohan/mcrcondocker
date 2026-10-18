@@ -1,0 +1,21 @@
+# Lokaler Paper-Testserver zum Aufzeichnen von Fixtures (siehe docs/testserver.md).
+# NICHT für den Betrieb des Dashboards nötig.
+services:
+  paper:
+    image: itzg/minecraft-server:java25
+    environment:
+      EULA: "TRUE"
+      TYPE: PAPER
+      VERSION: "26.3"
+      ONLINE_MODE: "FALSE"
+      ENABLE_RCON: "TRUE"
+      RCON_PASSWORD: testpass123
+      LEVEL_TYPE: minecraft:flat
+      VIEW_DISTANCE: "4"
+      ENABLE_WHITELIST: "FALSE"
+      MEMORY: 2G
+    ports:
+      - "127.0.0.1:25565:25565"
+      - "127.0.0.1:25575:25575"
+    volumes:
+      - ./mcdata:/data
