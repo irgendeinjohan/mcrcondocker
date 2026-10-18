@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/web/public/icons/icon.svg" alt="" width="96" height="96">
+<img src="docs/img/logo.svg" alt="" width="96" height="96">
 
 # MC-Dashboard
 
@@ -26,10 +26,10 @@ Spieler, Inventare, Karte, Konsole und Online-Zeiten auf einen Blick – im Brow
 > Das heißt: Es funktioniert, ist aber nicht von einem erfahrenen Entwickler Zeile für Zeile geprüft. Nutze es im Heimnetz, lies bei Interesse den Code und melde Fehler gern als [Issue](../../issues).
 
 <p align="center">
-<img src="docs/img/desktop-spieler.png" alt="Spieleransicht mit Inventar und Item-Tooltip" width="720"><br>
-<img src="docs/img/iphone-spieler.png" alt="Spielerliste auf dem Handy" width="200">
-<img src="docs/img/iphone-karte.png" alt="Karte auf dem Handy" width="200">
-<img src="docs/img/desktop-konsole.png" alt="Konsole mit Farbcodes" width="380">
+<img src="docs/img/screenshot-spieler.png" alt="Spieleransicht mit Inventar und Item-Tooltip" width="720"><br>
+<img src="docs/img/screenshot-handy-spieler.png" alt="Spielerliste auf dem Handy" width="200">
+<img src="docs/img/screenshot-handy-karte.png" alt="Karte auf dem Handy" width="200">
+<img src="docs/img/screenshot-konsole.png" alt="Konsole mit Farbcodes" width="380">
 </p>
 
 ## Was kann das Dashboard?
