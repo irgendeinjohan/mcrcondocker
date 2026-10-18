@@ -2,7 +2,7 @@
 
 So sind die Dateien in `tests/fixtures/26.3/` entstanden. Der Ablauf lässt sich wiederholen, zum Beispiel nach einem Minecraft-Update mit einer neuen Versionsnummer.
 
-> Die Plugins **ViaVersion/ViaBackwards** und die Einstellung „Namensprüfung aus“ gab es **nur auf diesem lokalen Testserver**, damit Testbots beitreten konnten. Der echte Server braucht nichts davon.
+> Die Plugins **ViaVersion/ViaBackwards** und die Einstellung „Namensprüfung aus“ gab es **nur auf diesem lokalen Testserver**, damit Testbots beitreten konnten. Für den Betrieb des Dashboards braucht ein Server nichts davon.
 
 ## 1. Server starten
 

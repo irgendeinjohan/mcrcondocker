@@ -1,0 +1,37 @@
+name: Fehler melden
+description: Etwas funktioniert nicht wie erwartet
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden! Bitte **keine Passwörter, IP-Adressen oder `.env`-Inhalte** posten.
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert?
+      description: Was hast du gemacht, was hast du erwartet, was ist stattdessen passiert?
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Minecraft-Server
+      placeholder: "z. B. Paper 26.3, Fabric 1.21.4, Vanilla …"
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Wo läuft das Dashboard?
+      placeholder: "z. B. Synology DS920+, Raspberry Pi 5, Unraid …"
+  - type: textarea
+    id: debug
+    attributes:
+      label: Debug-Export
+      description: Im Dashboard unter „Debug → Als JSON herunterladen“. Die Datei hier hineinziehen. Sie enthält keine Passwörter und keine Serveradresse.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container-Protokoll (optional)
+      render: text

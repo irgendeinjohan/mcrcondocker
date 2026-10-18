@@ -2,6 +2,21 @@
   "name": "mcrcondocker",
   "version": "1.0.0",
   "description": "Selbst gehostetes Web-Dashboard für einen Minecraft-Server, ausschließlich über RCON",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/irgendeinjohan/mcrcondocker.git"
+  },
+  "keywords": [
+    "minecraft",
+    "rcon",
+    "dashboard",
+    "paper",
+    "docker",
+    "self-hosted",
+    "geyser",
+    "floodgate"
+  ],
   "private": true,
   "type": "module",
   "engines": {

@@ -1,5 +1,7 @@
 # MC-Dashboard – Plan
 
+> **Historisches Dokument.** Das ist der ursprüngliche Plan aus der KI-Entwicklungssitzung, mit der dieses Projekt „gevibecodet“ wurde. Er bezieht sich auf das Setup des Autors (Paper-Server bei Nitrado, Synology NAS) und auf damals offene Rückfragen. Für Installation und Nutzung siehe die [README](../README.md).
+
 Stand: 18.10.2026. Entwurf vor der Umsetzung. Annahmen sind mit **(A)** markiert und gelten, bis du etwas anderes sagst.
 
 ## 1. Geprüfte Umgebung

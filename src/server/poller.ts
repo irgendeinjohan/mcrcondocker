@@ -21,6 +21,7 @@ export function dumpCommand(uuid: string): string {
   return `data modify storage ${STORAGE_TARGET} s set string entity ${uuid}`;
 }
 
+const UNKNOWN_COMMAND = /^Unknown or incomplete command/i;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Snapshot spätestens nach dieser Zeit speichern, auch ohne Änderung */
 const SNAPSHOT_SAVE_INTERVAL_MS = 60_000;
@@ -55,6 +56,9 @@ export class Poller extends EventEmitter {
   private maxPlayers: number | null = null;
   private perf: TpsInfo | null = null;
   private lastPerfAt = 0;
+  /** Server kennt /tps bzw. /mspt nicht (kein Paper) → nicht mehr abfragen */
+  private noTps = false;
+  private noMspt = false;
   private degraded = false;
   private lastSummariesJson = "";
   private lastStatusJson = "";
@@ -239,9 +243,23 @@ export class Poller extends EventEmitter {
     if (!this.paused && Date.now() - this.lastPerfAt >= this.opts.perfIntervalMs) {
       this.lastPerfAt = Date.now();
       try {
-        const tps = parseTps((await this.send("tps", "tps")).body, this.diag.warn);
-        const mspt = parseMspt((await this.send("mspt", "mspt")).body, this.diag.warn);
-        this.perf = { tps, mspt, at: Date.now() };
+        let tps: number[] | null = null;
+        let mspt: { avg: number; min: number; max: number }[] | null = null;
+        if (!this.noTps) {
+          const body = (await this.send("tps", "tps")).body;
+          if (UNKNOWN_COMMAND.test(body)) {
+            this.noTps = true;
+            this.diag.warn("info", "no-tps", "Der Server kennt /tps nicht (kein Paper?) – TPS wird nicht angezeigt");
+          } else tps = parseTps(body, this.diag.warn);
+        }
+        if (!this.noMspt) {
+          const body = (await this.send("mspt", "mspt")).body;
+          if (UNKNOWN_COMMAND.test(body)) {
+            this.noMspt = true;
+            this.diag.warn("info", "no-mspt", "Der Server kennt /mspt nicht (kein Paper?) – MSPT wird nicht angezeigt");
+          } else mspt = parseMspt(body, this.diag.warn);
+        }
+        this.perf = tps || mspt ? { tps, mspt, at: Date.now() } : null;
       } catch (e) {
         if (e instanceof RconError) {
           this.handleRconError(e);

@@ -169,3 +169,29 @@ describe("API", () => {
     expect((await app.inject({ method: "POST", url: "/api/login", headers: json, payload: { password: DASH_PW }, remoteAddress: "10.9.9.9" })).statusCode).toBe(429);
   }, 20_000);
 });
+
+describe("Server ohne /tps und /mspt (Vanilla/Fabric/Spigot)", () => {
+  it("blendet Leistungswerte aus, statt ständig zu warnen", async () => {
+    const world = new MockWorld();
+    const vanilla = await startMockRconServer({
+      password: "pw",
+      handler: (c) => (c === "tps" || c === "mspt" ? `Unknown or incomplete command. See below for error\n${c}<--[HERE]` : world.handle(c)),
+    });
+    const r = new Repo(openMemoryDb());
+    const d = new Diagnostics();
+    const client = new RconClient({ host: "127.0.0.1", port: vanilla.port, password: "pw" });
+    const p = new Poller(client, r, new SessionTracker(r), d, { pollIntervalMs: 60_000, perfIntervalMs: 0, floodgatePrefix: ".", mock: false, version: "test" });
+    client.start();
+    await client.waitForConnected();
+    await p.cycle();
+    await p.cycle();
+    expect(p.status().perf).toBeNull();
+    expect(p.status().online).toBeGreaterThan(0);
+    expect(d.getWarnings().map((w) => [w.level, w.key])).toEqual(expect.arrayContaining([["info", "no-tps"], ["info", "no-mspt"]]));
+    expect(d.getWarnings().filter((w) => w.level !== "info")).toEqual([]);
+    // nach dem ersten Mal werden die Befehle nicht mehr gesendet
+    expect((d.getRaw().tps ?? []).length).toBe(1);
+    client.stop();
+    await vanilla.close();
+  });
+});

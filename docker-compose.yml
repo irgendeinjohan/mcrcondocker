@@ -1,5 +1,5 @@
 # MC-Dashboard – Werte kommen aus der Datei .env im selben Ordner (siehe .env.example).
-# Für den Synology Container Manager gibt es im README eine Variante zum Einfügen.
+# Variante mit Werten direkt in der Datei (z. B. für Synology/Portainer): siehe README.
 services:
   mc-dashboard:
     image: ghcr.io/irgendeinjohan/mcrcondocker:latest
