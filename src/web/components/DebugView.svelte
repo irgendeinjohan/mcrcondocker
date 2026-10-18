@@ -74,6 +74,11 @@
         <div><span class="k">Intervall</span> {data.status.pollIntervalMs / 1000} s</div>
         <div><span class="k">Texturen</span> {data.assets.textures ? `${data.assets.textures} (${data.assets.textureSource})` : "keine (Ersatz-Kacheln)"}</div>
         <div><span class="k">Sprachdatei</span> {data.assets.language ? `${data.assets.language} (${data.assets.translations} Einträge)` : "keine"}</div>
+        <div>
+          <span class="k">Lizenzen</span>
+          <a href="https://github.com/irgendeinjohan/mcrcondocker/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
+          · <a href="/third-party-licenses.md" target="_blank" rel="noopener">Drittanbieter</a>
+        </div>
         {#if data.status.degraded}<div class="warnc">Rückfallweg aktiv: Spielerdaten nur eingeschränkt lesbar</div>{/if}
       </div>
     {/if}

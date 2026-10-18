@@ -10,6 +10,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: "es2022",
     assetsInlineLimit: 0,
+    // Lizenztexte aller im Frontend gebündelten Bibliotheken (MIT verlangt den Hinweis)
+    license: { fileName: "third-party-licenses.md" },
   },
   server: {
     port: 5173,

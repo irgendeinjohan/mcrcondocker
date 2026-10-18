@@ -18,7 +18,9 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+COPY docker/collect-licenses.mjs ./
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+  && node collect-licenses.mjs > THIRD-PARTY-LICENSES.md
 
 # --- 3) Laufzeit ---------------------------------------------------------------
 FROM node:${NODE_VERSION}-alpine
@@ -31,6 +33,8 @@ ENV NODE_ENV=production \
     DATA_DIR=/data
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/THIRD-PARTY-LICENSES.md ./
+COPY LICENSE ./
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
