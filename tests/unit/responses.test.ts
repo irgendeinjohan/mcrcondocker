@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { collectingWarn } from "../../src/server/parse/diagnostics.js";
-import { parseEntityDump, parseList, parseMspt, parsePathValue, parseTps } from "../../src/server/parse/responses.js";
+import { parseEntityDump, parseList, parseMspt, parsePathValue, parseTps, parseUuidQuery, uuidFromInts } from "../../src/server/parse/responses.js";
 import { fixture, fixture263 } from "./helpers.js";
 
 describe("/list", () => {
   it("leere Liste (26.3)", () => {
     const { warn } = collectingWarn();
-    expect(parseList(fixture263("list-uuids-empty"), warn)).toEqual({ online: 0, max: 20, players: [] });
+    expect(parseList(fixture263("list-uuids-empty"), warn)).toEqual({ online: 0, max: 20, players: [], truncated: false });
   });
 
   it("3 Spieler mit UUIDs inkl. Bedrock-Präfix (26.3)", () => {
@@ -37,10 +37,43 @@ describe("/list", () => {
     ]);
   });
 
+  it("ab 6 Spielern gekürzt (32 Textstücke) → truncated, ohne Warnung", () => {
+    const { warn, list } = collectingWarn();
+    // Aufbau wie vom echten Server (Paper 26.3, 9 Spieler), Namen ersetzt
+    const body =
+      "There are 9 of a max of 20 players online: .Bedrock_A (00000000-0000-0000-0009-01fc2619698b), Spieler_B (49132d1a-5057-4090-91a3-c6f78a165335), " +
+      ".Bedrock_C (00000000-0000-0000-0009-01f5c5888ebe), Spieler_D (50451ed9-1118-47e1-b649-327d5de001c3), Spieler_E (833d65c6-c91d-4dea-96e8-b70fbdbfc647), " +
+      "Spieler_F (a4061460-825d-4838-981d-418f890a6883...";
+    const r = parseList(body, warn)!;
+    expect(r.online).toBe(9);
+    expect(r.truncated).toBe(true);
+    expect(r.players.map((p) => p.name)).toEqual([".Bedrock_A", "Spieler_B", ".Bedrock_C", "Spieler_D", "Spieler_E"]);
+    expect(list).toEqual([]);
+  });
+
   it("unlesbare Antwort → null + Warnung", () => {
     const { warn, list } = collectingWarn();
     expect(parseList("Irgendwas anderes", warn)).toBeNull();
     expect(list[0]!.key).toBe("list-unreadable");
+  });
+});
+
+describe("execute as @a run data get entity @s UUID", () => {
+  it("UUID aus Int-Array (Werte aus echten Spielerdaten)", () => {
+    expect(uuidFromInts([-2093128250, -920826390, -1763133681, -1111505337])).toBe("833d65c6-c91d-4dea-96e8-b70fbdbfc647");
+    expect(uuidFromInts([0, 0, 590325, -980906306])).toBe("00000000-0000-0000-0009-01f5c5888ebe");
+  });
+
+  it("mehrere Meldungen mit und ohne Zeilenumbruch", () => {
+    const a = "Spieler_E has the following entity data: [I; -2093128250, -920826390, -1763133681, -1111505337]";
+    const b = ".Bedrock C has the following entity data: [I; 0, 0, 590325, -980906306]";
+    const expected = [
+      { name: "Spieler_E", uuid: "833d65c6-c91d-4dea-96e8-b70fbdbfc647" },
+      { name: ".Bedrock C", uuid: "00000000-0000-0000-0009-01f5c5888ebe" },
+    ];
+    expect(parseUuidQuery(`${a}\n${b}\n`)).toEqual(expected);
+    expect(parseUuidQuery(a + b)).toEqual(expected);
+    expect(parseUuidQuery("No entity was found")).toEqual([]);
   });
 });
 

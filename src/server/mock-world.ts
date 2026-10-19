@@ -195,8 +195,18 @@ export class MockWorld {
     if (lower === "list" || lower === "list uuids") {
       this.advance();
       const on = this.online();
-      const names = on.map((p) => (lower === "list" ? p.name : `${p.name} (${p.uuid})`)).join(", ");
-      return `There are ${on.length} of a max of 20 players online: ${names}`;
+      // wie der echte Server: Text in Stücken, nach 32 Stücken "..." (siehe docs/datenformat.md)
+      const pieces = ["There are ", String(on.length), " of a max of ", "20", " players online: "];
+      on.forEach((p, i) => {
+        if (i) pieces.push(", ");
+        pieces.push(...(lower === "list" ? [p.name] : [p.name, " (", p.uuid, ")"]));
+      });
+      return pieces.length > 32 ? pieces.slice(0, 32).join("") + "..." : pieces.join("");
+    }
+    if (lower === "execute as @a run data get entity @s uuid") {
+      return this.online()
+        .map((p) => `${p.name} has the following entity data: ${p.uuidInts.replace(/,/g, ", ").replace(";", "; ")}`)
+        .join("\n");
     }
     let m = /^data modify storage \S+ \S+ set string entity (\S+)$/i.exec(cmd);
     if (m) {
