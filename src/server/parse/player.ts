@@ -24,7 +24,7 @@ const KNOWN_FIELDS = new Set([
   "drop_chances", "Paper.FreezeLock", "Paper.ShouldBurnInDay", "last_death_location", "invulnerable_time",
   "entered_nether_pos", "current_explosion_impact_pos", "ignore_fall_damage_from_current_explosion",
   "Spigot.KeepInventory", "Paper.PreviousGameMode", "previousPlayerGameType", "last_hurt_by_player",
-  "last_hurt_by_player_memory_time",
+  "last_hurt_by_player_memory_time", "sleeping_pos",
 ]);
 
 const GAME_MODES: GameMode[] = ["survival", "creative", "adventure", "spectator"];

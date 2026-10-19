@@ -1,6 +1,6 @@
 {
   "name": "mcrcondocker",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Selbst gehostetes Web-Dashboard für einen Minecraft-Server, ausschließlich über RCON",
   "license": "MIT",
   "repository": {

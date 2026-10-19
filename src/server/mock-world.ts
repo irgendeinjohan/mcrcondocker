@@ -163,9 +163,23 @@ export class MockWorld {
     survival: [0, "Survival Mode"], creative: [1, "Creative Mode"], adventure: [2, "Adventure Mode"], spectator: [3, "Spectator Mode"],
   };
 
+  /** wie der echte Server: Befehle nur für Spieler lehnen eine UUID als Ziel ab */
+  private static readonly ONLY_PLAYERS = "Only players may be affected by this command, but the provided selector includes entities";
+  private static isUuid(s: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  }
+
   /** Befehle, die das Dashboard für Aktionen und die Welt-Seite verwendet */
   private handleAdmin(cmd: string): string | null {
     let m: RegExpExecArray | null;
+    if ((m = /^execute as (\S+) run (.+)$/i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      if (!p) return "No entity was found";
+      // @s → Name des ausführenden Spielers
+      return this.handle(m[2]!.replace(/(^| )@s(?= |$)/g, `$1${p.name}`));
+    }
+    const playersOnly = /^(gamemode \w+|give|clear|kick|msg|tell|w) (\S+)/i.exec(cmd);
+    if (playersOnly && MockWorld.isUuid(playersOnly[2]!)) return `${MockWorld.ONLY_PLAYERS}\n${cmd}<--[HERE]`;
     if ((m = /^gamemode (\w+) (\S+)$/i.exec(cmd))) {
       const mode = MockWorld.MODES[m[1]!.toLowerCase()];
       const p = this.find(m[2]!);
@@ -249,13 +263,18 @@ export class MockWorld {
       this.timeSetAt = Date.now();
       return `Set the time to ${m[1]}`;
     }
-    if (/^time query daytime$/i.test(cmd)) return `The time is ${this.totalTicks() % 24000}`;
-    if (/^time query day$/i.test(cmd)) return `The time is ${Math.floor(this.totalTicks() / 24000)}`;
+    // wie 26.x: Timelines statt "daytime"
+    if (/^time query daytime$/i.test(cmd)) return `Can't find element 'minecraft:daytime' of type 'minecraft:timeline'\n...ry daytime<--[HERE]`;
+    if (/^time query day$/i.test(cmd)) return `Timeline minecraft:day is at ${this.totalTicks() % 24000} tick(s)`;
+    if (/^time query day repetition$/i.test(cmd)) return `Timeline minecraft:day is at repetition ${Math.floor(this.totalTicks() / 24000)}`;
     if ((m = /^weather (clear|rain|thunder)/i.exec(cmd))) {
       this.weather = m[1]!.toLowerCase() as typeof this.weather;
       return `Set the weather to ${this.weather === "clear" ? "clear" : this.weather === "rain" ? "rain" : "rain & thunder"}`;
     }
-    if ((m = /^execute if predicate \{condition:"minecraft:weather_check",(raining|thundering):true\}$/i.exec(cmd))) {
+    if ((m = /^execute if predicate \{condition:/i.exec(cmd))) {
+      return `Failed to parse structure: No key type in MapLike[${cmd.slice(21)}]\n...<--[HERE]`;
+    }
+    if ((m = /^execute if predicate \{type:"minecraft:weather_check",(raining|thundering):true\}$/i.exec(cmd))) {
       const yes = m[1] === "thundering" ? this.weather === "thunder" : this.weather !== "clear";
       return yes ? "Test passed" : "Test failed";
     }

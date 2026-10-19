@@ -14,6 +14,7 @@ const ERROR_PATTERNS = [
   /^That (player|IP)/i,
   /^Could not /i,
   /^Can't /i,
+  /^Failed to /i,
   /^Cannot /i,
   /^Nothing changed/i,
   /^Only players may/i,
@@ -33,20 +34,36 @@ export function looksLikeError(body: string): boolean {
 /** "Gamerule keepInventory is currently set to: false" → false; Zahl → number; sonst null */
 export function parseGamerule(body: string): boolean | number | null {
   if (looksLikeError(body)) return null;
-  const m = /(?:is currently set to|is now set to):\s*(\S+)/i.exec(stripLegacy(body));
+  const text = stripLegacy(body).trim();
+  // bekanntes Format, sonst das letzte Wort (falls sich der Satz in neuen Versionen ändert)
+  const m = /(?:is currently set to|is now set to):\s*(\S+)/i.exec(text) ?? /(\S+)$/.exec(text);
   if (!m) return null;
-  const v = m[1]!.toLowerCase();
+  const v = m[1]!.toLowerCase().replace(/[.,;]$/, "");
   if (v === "true") return true;
   if (v === "false") return false;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-/** "The time is 1234" → 1234 */
+/** "The time is 1234" → 1234 (bis 1.21) */
 export function parseTimeQuery(body: string): number | null {
   if (looksLikeError(body)) return null;
-  const m = /time is\s*(-?\d+)/i.exec(stripLegacy(body)) ?? /(-?\d+)\s*$/.exec(stripLegacy(body).trim());
+  const m = /time is\s*(-?\d+)/i.exec(stripLegacy(body));
   return m ? Number(m[1]) : null;
+}
+
+/** "Timeline minecraft:day is at 4839 tick(s)" → 4839 (ab 26.x) */
+export function parseTimeline(body: string): number | null {
+  if (looksLikeError(body)) return null;
+  const m = /Timeline \S+ is at (-?\d+)/i.exec(stripLegacy(body));
+  return m ? Number(m[1]) : null;
+}
+
+/** letzte ganze Zahl der Antwort (z. B. "time query day repetition"), bei Fehler null */
+export function parseLastNumber(body: string): number | null {
+  if (looksLikeError(body)) return null;
+  const all = [...stripLegacy(body).matchAll(/-?\d+/g)];
+  return all.length ? Number(all[all.length - 1]![0]) : null;
 }
 
 const DIFFICULTIES: Difficulty[] = ["peaceful", "easy", "normal", "hard"];
