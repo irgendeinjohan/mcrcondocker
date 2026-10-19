@@ -8,7 +8,7 @@ import type {
 } from "../shared/types.js";
 import type { Repo } from "./db/repo.js";
 import type { Diagnostics } from "./parse/diagnostics.js";
-import { looksLikeError, parseBanlist, parseDifficulty, parseGamerule, parseTest, parseTimeQuery } from "./parse/world.js";
+import { looksLikeError, parseBanlist, parseDifficulty, parseGamerule, parseTest, parseLastNumber, parseTimeline, parseTimeQuery } from "./parse/world.js";
 import type { RconClient } from "./rcon/client.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -77,6 +77,15 @@ function textOf(v: unknown, field: string, required: boolean): string {
   return t;
 }
 
+/**
+ * Befehle, die nur Spieler erlauben (gamemode, give, clear, kick), lehnen eine UUID als Ziel ab
+ * („Only players may be affected …“), weil eine UUID auch andere Entities meinen kann.
+ * Über "execute as <UUID> run … @s" geht es trotzdem eindeutig per UUID.
+ */
+function asPlayer(uuid: string, command: string): string {
+  return `execute as ${uuid} run ${command}`;
+}
+
 /** Text als SNBT-/JSON-String (beide Formate verstehen "…" mit \" und \\) */
 function quoted(text: string): string {
   return JSON.stringify(text);
@@ -97,7 +106,7 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
     case "gamemode": {
       const uuid = uuidOf(a.uuid);
       if (!(a.mode in GAME_MODE_LABELS)) throw new ActionError("Ungültiger Spielmodus");
-      return { label: `Spielmodus von ${who(uuid)} → ${GAME_MODE_LABELS[a.mode]}`, commands: [`gamemode ${a.mode} ${uuid}`], confirm: null };
+      return { label: `Spielmodus von ${who(uuid)} → ${GAME_MODE_LABELS[a.mode]}`, commands: [asPlayer(uuid, `gamemode ${a.mode} @s`)], confirm: null };
     }
     case "heal": {
       const uuid = uuidOf(a.uuid);
@@ -142,16 +151,16 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
       const count = a.count;
       if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 6400) throw new ActionError("Anzahl muss zwischen 1 und 6400 liegen");
       const item = a.item.includes(":") ? a.item : `minecraft:${a.item}`;
-      return { label: `${who(uuid)} erhält ${count}× ${item.replace("minecraft:", "")}`, commands: [`give ${uuid} ${item} ${count}`], confirm: null };
+      return { label: `${who(uuid)} erhält ${count}× ${item.replace("minecraft:", "")}`, commands: [asPlayer(uuid, `give @s ${item} ${count}`)], confirm: null };
     }
     case "clear": {
       const uuid = uuidOf(a.uuid);
-      return { label: `Inventar von ${who(uuid)} geleert`, commands: [`clear ${uuid}`], confirm: `Das komplette Inventar von ${who(uuid)} wird gelöscht.` };
+      return { label: `Inventar von ${who(uuid)} geleert`, commands: [asPlayer(uuid, "clear @s")], confirm: `Das komplette Inventar von ${who(uuid)} wird gelöscht.` };
     }
     case "kick": {
       const uuid = uuidOf(a.uuid);
       const reason = textOf(a.reason, "Grund", false);
-      return { label: `${who(uuid)} gekickt${reason ? ` (${reason})` : ""}`, commands: [`kick ${uuid}${reason ? " " + reason : ""}`], confirm: `${who(uuid)} wird vom Server geworfen.` };
+      return { label: `${who(uuid)} gekickt${reason ? ` (${reason})` : ""}`, commands: [asPlayer(uuid, `kick @s${reason ? " " + reason : ""}`)], confirm: `${who(uuid)} wird vom Server geworfen.` };
     }
     case "ban": {
       const uuid = uuidOf(a.uuid);
@@ -214,9 +223,10 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
       return { label: `Titel an alle: ${text}${sub ? ` / ${sub}` : ""}`, commands: cmds, confirm: null };
     }
     case "msg": {
-      const uuid = uuidOf(a.uuid);
+      // msg per Name: über "execute as" wäre der Spieler selbst der Absender
+      const name = nameFor(uuidOf(a.uuid));
       const text = textOf(a.text, "Nachricht", true);
-      return { label: `Nachricht an ${who(uuid)}: ${text}`, commands: [`msg ${uuid} ${text}`], confirm: null };
+      return { label: `Nachricht an ${name}: ${text}`, commands: [`msg ${name} ${text}`], confirm: null };
     }
     default:
       throw new ActionError("Unbekannte Aktion");
@@ -229,6 +239,8 @@ const OUTPUT_LIMIT = 2000;
 export class ActionService extends EventEmitter {
   /** aufgelöste Gamerule-Namen pro Schlüssel (null = Server kennt keinen) */
   private ruleNames = new Map<string, string | null>();
+  private timeStyle: "classic" | "timeline" | null = null;
+  private predicateKey: string | null = null;
 
   constructor(
     private readonly rcon: RconClient,
@@ -302,15 +314,8 @@ export class ActionService extends EventEmitter {
 
   /** Liest Uhrzeit, Wetter, Schwierigkeit und Gamerules (ca. 15 kurze Befehle). */
   async world(): Promise<WorldState> {
-    const daytime = parseTimeQuery(await this.send("world", "time query daytime"));
-    const day = parseTimeQuery(await this.send("world", "time query day"));
-    let weather: WeatherKind | null = null;
-    const thunder = parseTest(await this.send("world", `execute if predicate {condition:"minecraft:weather_check",thundering:true}`));
-    if (thunder === true) weather = "thunder";
-    else if (thunder === false) {
-      const rain = parseTest(await this.send("world", `execute if predicate {condition:"minecraft:weather_check",raining:true}`));
-      weather = rain === null ? null : rain ? "rain" : "clear";
-    }
+    const { daytime, day } = await this.queryTime();
+    const weather = await this.queryWeather();
     const difficulty = parseDifficulty(await this.send("world", "difficulty"));
     const gamerules: GameruleState[] = [];
     for (const def of GAMERULES) {
@@ -332,6 +337,44 @@ export class ActionService extends EventEmitter {
       if (!found && known) this.ruleNames.delete(def.key);
     }
     return { daytime, day, weather, difficulty, gamerules, worldSpawn: this.worldSpawn() };
+  }
+
+  /**
+   * Bis 1.21: "time query daytime" → "The time is 1234", "time query day" → Tageszahl.
+   * Ab 26.1 gibt es Uhren/Timelines: "time query day" → "Timeline minecraft:day is at 4839 tick(s)",
+   * "daytime" existiert nicht mehr (https://minecraft.wiki/w/Commands/time).
+   */
+  private async queryTime(): Promise<{ daytime: number | null; day: number | null }> {
+    if (this.timeStyle !== "timeline") {
+      const daytime = parseTimeQuery(await this.send("world", "time query daytime"));
+      if (daytime !== null) {
+        this.timeStyle = "classic";
+        return { daytime, day: parseTimeQuery(await this.send("world", "time query day")) };
+      }
+    }
+    // "time query day" = Ticks in der aktuellen Wiederholung der Timeline (0–23999),
+    // "time query day repetition" = Anzahl der Wiederholungen (Tage)
+    const t = parseTimeline(await this.send("world", "time query day"));
+    if (t === null) return { daytime: null, day: null };
+    this.timeStyle = "timeline";
+    const rep = parseLastNumber(await this.send("world", "time query day repetition"));
+    return { daytime: t % 24000, day: rep };
+  }
+
+  /** Wetter per Prädikat; ab 26.x heißt der Schlüssel "type" statt "condition". */
+  private async queryWeather(): Promise<WeatherKind | null> {
+    const keys = this.predicateKey ? [this.predicateKey] : ["type", "condition"];
+    for (const key of keys) {
+      const test = async (what: string) => parseTest(await this.send("world", `execute if predicate {${key}:"minecraft:weather_check",${what}:true}`));
+      const thunder = await test("thundering");
+      if (thunder === null) continue;
+      this.predicateKey = key;
+      if (thunder) return "thunder";
+      const rain = await test("raining");
+      return rain === null ? null : rain ? "rain" : "clear";
+    }
+    this.predicateKey = null;
+    return null;
   }
 
   async bans(): Promise<BanLists> {

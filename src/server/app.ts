@@ -227,7 +227,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get("/api/debug", async () => ({ ...diagSnapshot(), assets: assets.info(), status: poller.status() }));
   app.get("/api/debug/export", async (_req, reply) => {
     reply.header("Content-Disposition", `attachment; filename="mcdash-debug-${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.json"`);
-    return { ...diagSnapshot(), assets: assets.info(), status: poller.status(), exportedAt: new Date().toISOString() };
+    // letzte Aktionen mit Serverantwort, damit fehlgeschlagene Aktionen im Export sichtbar sind
+    return { ...diagSnapshot(), assets: assets.info(), status: poller.status(), audit: actions.auditEntries(100), exportedAt: new Date().toISOString() };
   });
   app.post("/api/debug/clear-warnings", async () => {
     diag.clearWarnings();

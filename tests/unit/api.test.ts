@@ -188,7 +188,7 @@ describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
   it("Spielmodus setzen", async () => {
     const r = await act({ type: "gamemode", uuid: alex, mode: "creative" });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ ok: true, label: "Spielmodus von Alex → Kreativ", commands: [`gamemode creative ${alex}`] });
+    expect(r.json()).toMatchObject({ ok: true, label: "Spielmodus von Alex → Kreativ", commands: [`execute as ${alex} run gamemode creative @s`] });
     expect(mock().gameMode).toBe(1);
     await act({ type: "gamemode", uuid: alex, mode: "survival" });
   });
@@ -206,8 +206,14 @@ describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("Kicken und Inventar leeren über execute as (UUID wäre für Spieler-Befehle unzulässig)", async () => {
+    const ninja = "65366474-7912-31ba-8ffe-0c2eab803f9e";
+    expect((await act({ type: "kick", uuid: ninja, reason: "AFK" }, true)).json()).toMatchObject({ ok: true, commands: [`execute as ${ninja} run kick @s AFK`] });
+    expect((await act({ type: "clear", uuid: ninja }, true)).json()).toMatchObject({ ok: true, output: "Removed 3 item(s) from player NetherNinja" });
+  });
+
   it("Items geben, Fehler vom Server wird erkannt", async () => {
-    expect((await act({ type: "give", uuid: alex, item: "torch", count: 64 })).json()).toMatchObject({ ok: true, commands: [`give ${alex} minecraft:torch 64`] });
+    expect((await act({ type: "give", uuid: alex, item: "torch", count: 64 })).json()).toMatchObject({ ok: true, commands: [`execute as ${alex} run give @s minecraft:torch 64`] });
     expect((await act({ type: "give", uuid: alex, item: "minecraft:Gibts-Nicht", count: 1 })).statusCode).toBe(400);
     expect((await act({ type: "give", uuid: alex, item: "torch", count: 0 })).statusCode).toBe(400);
   });
@@ -239,6 +245,7 @@ describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
     expect(w.daytime).toBeGreaterThanOrEqual(18000);
     expect(w.daytime).toBeLessThan(18100);
     expect(w.weather).toBe("thunder");
+    expect(w.day).toBe(0);
     expect(w.difficulty).toBe("normal");
     expect(w.gamerules.find((g: { key: string }) => g.key === "keepInventory")).toEqual({ key: "keepInventory", name: "keep_inventory", value: false });
     expect(w.gamerules.find((g: { key: string }) => g.key === "playersSleepingPercentage").value).toBe(100);
@@ -262,7 +269,8 @@ describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
   it("Nachrichten: Titel mit Untertitel, private Nachricht", async () => {
     const r = (await act({ type: "title", text: 'Hallo "Welt"', subtitle: "Neustart in 5 min" })).json();
     expect(r.commands).toEqual(["title @a times 10 70 20", 'title @a subtitle "Neustart in 5 min"', 'title @a title "Hallo \\"Welt\\""']);
-    expect((await act({ type: "msg", uuid: alex, text: "Hi\nstop" })).json().commands).toEqual([`msg ${alex} Hi stop`]);
+    const msg = (await act({ type: "msg", uuid: alex, text: "Hi\nstop" })).json();
+    expect(msg).toMatchObject({ ok: true, commands: ["msg Alex Hi stop"] });
     expect((await act({ type: "say", text: "" })).statusCode).toBe(400);
   });
 

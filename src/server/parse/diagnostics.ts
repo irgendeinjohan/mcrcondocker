@@ -2,8 +2,9 @@ import type { DiagnosticWarning, RawResponse, WarningLevel } from "../../shared/
 
 export type Warn = (level: WarningLevel, key: string, message: string, context?: string) => void;
 
-/** Ringpuffer-Größe pro Befehlsart */
+/** Ringpuffer-Größe pro Befehlsart (Aktionen/Welt: mehr, damit Fehler im Export landen) */
 const RAW_PER_KIND = 5;
+const RAW_PER_KIND_LARGE: Record<string, number> = { action: 40, world: 40, console: 20 };
 /** Sehr große Antworten nur gekürzt aufbewahren */
 const RAW_MAX_CHARS = 256 * 1024;
 const MAX_WARNINGS = 500;
@@ -43,7 +44,8 @@ export class Diagnostics {
       e.truncatedForDisplay = true;
     }
     list.unshift(e);
-    if (list.length > RAW_PER_KIND) list.length = RAW_PER_KIND;
+    const max = RAW_PER_KIND_LARGE[entry.kind] ?? RAW_PER_KIND;
+    if (list.length > max) list.length = max;
     this.raw.set(entry.kind, list);
   }
 

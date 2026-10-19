@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAction } from "../../src/server/actions.js";
-import { looksLikeError, parseBanlist, parseDifficulty, parseGamerule, parseTest, parseTimeQuery } from "../../src/server/parse/world.js";
+import { looksLikeError, parseBanlist, parseDifficulty, parseGamerule, parseLastNumber, parseTest, parseTimeline, parseTimeQuery } from "../../src/server/parse/world.js";
 
 describe("Welt-Antworten", () => {
   it("Gamerule-Abfrage", () => {
@@ -12,6 +12,9 @@ describe("Welt-Antworten", () => {
 
   it("Zeit, Schwierigkeit, Prädikat", () => {
     expect(parseTimeQuery("The time is 13042")).toBe(13042);
+    expect(parseTimeQuery("Can't find element 'minecraft:daytime' of type 'minecraft:timeline'\n...ry daytime<--[HERE]")).toBeNull();
+    expect(parseTimeline("Timeline minecraft:day is at 4839 tick(s)")).toBe(4839);
+    expect(parseLastNumber("Timeline minecraft:day is at repetition 12")).toBe(12);
     expect(parseDifficulty("The difficulty is Hard")).toBe("hard");
     expect(parseDifficulty("§cIrgendwas")).toBeNull();
     expect(parseTest("Test passed")).toBe(true);
@@ -35,6 +38,8 @@ describe("Welt-Antworten", () => {
     expect(looksLikeError("Nothing changed. The player isn't banned")).toBe(true);
     expect(looksLikeError("Set Alex's game mode to Creative Mode")).toBe(false);
     expect(looksLikeError("")).toBe(false);
+    expect(looksLikeError("Only players may be affected by this command, but the provided selector includes entities\nmsg x<--[HERE]")).toBe(true);
+    expect(looksLikeError("Failed to parse structure: No key type in MapLike[{}]")).toBe(true);
   });
 });
 
@@ -59,7 +64,7 @@ describe("Aktionen → Befehle", () => {
 
   it("Gründe werden einzeilig, gefährliche Aktionen markiert", () => {
     const b = buildAction({ type: "kick", uuid: u, reason: "AFK\nzu lange" }, ctx);
-    expect(b.commands).toEqual([`kick ${u} AFK zu lange`]);
+    expect(b.commands).toEqual([`execute as ${u} run kick @s AFK zu lange`]);
     expect(b.confirm).toBeTruthy();
     expect(buildAction({ type: "heal", uuid: u }, ctx).confirm).toBeNull();
     expect(buildAction({ type: "difficulty", difficulty: "hard" }, ctx).confirm).toBeTruthy();
