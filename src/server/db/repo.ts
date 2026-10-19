@@ -1,5 +1,5 @@
 // Typisierte Datenbankzugriffe.
-import type { GapEntry, GameMode, PlayerData, SessionEntry } from "../../shared/types.js";
+import type { AuditEntry, GapEntry, GameMode, PlayerData, SessionEntry } from "../../shared/types.js";
 import type { Db } from "./db.js";
 
 export interface PlayerRow {
@@ -128,6 +128,24 @@ export class Repo {
     return (this.db.prepare(`SELECT id, start, "end", reason FROM gaps WHERE COALESCE("end", 9e15) >= ? ORDER BY start DESC LIMIT 200`).all(since) as unknown as GapEntry[]).map((g) => ({ ...g }));
   }
 
+  // --- Aktionsprotokoll ---
+  addAudit(e: Omit<AuditEntry, "id">): AuditEntry {
+    const r = this.db
+      .prepare("INSERT INTO audit_log (at, source, label, command, ok, output) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(e.at, e.source, e.label, e.command, e.ok ? 1 : 0, e.output);
+    const id = Number(r.lastInsertRowid);
+    // nur die letzten Einträge behalten
+    if (id % 100 === 0) this.db.prepare("DELETE FROM audit_log WHERE id <= ?").run(id - AUDIT_KEEP);
+    return { id, ...e };
+  }
+
+  listAudit(limit: number, before?: number): AuditEntry[] {
+    const rows = (before
+      ? this.db.prepare("SELECT * FROM audit_log WHERE id < ? ORDER BY id DESC LIMIT ?").all(before, limit)
+      : this.db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?").all(limit)) as unknown as RawAudit[];
+    return rows.map((r) => ({ id: r.id, at: r.at, source: r.source as AuditEntry["source"], label: r.label, command: r.command, ok: r.ok === 1, output: r.output }));
+  }
+
   // --- Login-Sessions ---
   createAuthSession(tokenHash: string, now: number, expiresAt: number): void {
     this.db.prepare("INSERT INTO auth_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)").run(tokenHash, now, expiresAt);
@@ -144,6 +162,18 @@ export class Repo {
   purgeAuthSessions(now: number): void {
     this.db.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").run(now);
   }
+}
+
+const AUDIT_KEEP = 5000;
+
+interface RawAudit {
+  id: number;
+  at: number;
+  source: string;
+  label: string;
+  command: string;
+  ok: number;
+  output: string;
 }
 
 interface RawSession {

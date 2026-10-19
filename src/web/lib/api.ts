@@ -1,5 +1,6 @@
 import type {
-  ConsoleEntry, DiagnosticsSnapshot, GapEntry, PlayerDetail, PlayerSessionStats, PlayerSummary, ServerStatus, SessionEntry,
+  ActionRequest, ActionResult, AuditEntry, BanLists, ConsoleEntry, DiagnosticsSnapshot, GapEntry, ItemInfo, PlayerDetail,
+  PlayerSessionStats, PlayerSummary, ServerStatus, SessionEntry, Vec3, WorldState,
 } from "../../shared/types";
 
 export class ApiError extends Error {
@@ -63,4 +64,11 @@ export const api = {
   debug: () => request<DiagnosticsSnapshot & { assets: AssetsInfo; status: ServerStatus }>("GET", "/api/debug"),
   clearWarnings: () => request<{ ok: true }>("POST", "/api/debug/clear-warnings", {}),
   assets: () => request<AssetsInfo>("GET", "/api/assets"),
+  action: (action: ActionRequest, confirmed = false) => request<ActionResult>("POST", "/api/action", { action, confirmed }),
+  world: () => request<WorldState>("GET", "/api/world"),
+  worldSpawn: () => request<{ worldSpawn: Vec3 | null }>("GET", "/api/world/spawn"),
+  setWorldSpawn: (spawn: Vec3 | null) => request<{ worldSpawn: Vec3 | null }>("POST", "/api/world/spawn", { spawn }),
+  bans: () => request<BanLists>("GET", "/api/bans"),
+  items: () => request<ItemInfo[]>("GET", "/api/items"),
+  audit: (limit = 200, before?: number) => request<AuditEntry[]>("GET", `/api/audit?limit=${limit}${before ? `&before=${before}` : ""}`),
 };

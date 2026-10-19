@@ -65,6 +65,10 @@ export interface PlayerData {
   offhand: Item | null;
   enderChest: Item[] | null;
   effects: Effect[];
+  /** letzter Todespunkt (LastDeathLocation) */
+  lastDeath?: { dimension: string; pos: Vec3 } | null;
+  /** gesetzter Spawnpunkt (Bett/Seelenanker) */
+  respawn?: { dimension: string; pos: Vec3 } | null;
   /** false, wenn nur Einzelwerte gelesen werden konnten (Rückfallweg) */
   complete: boolean;
 }
@@ -191,4 +195,89 @@ export interface DiagnosticsSnapshot {
 export type LiveEvent =
   | { type: "status"; status: ServerStatus }
   | { type: "players"; players: PlayerSummary[] }
-  | { type: "console"; entry: ConsoleEntry };
+  | { type: "console"; entry: ConsoleEntry }
+  | { type: "audit"; entry: AuditEntry };
+
+// --- Aktionen (Spieler, Welt, Server) ------------------------------------
+
+export type WeatherKind = "clear" | "rain" | "thunder";
+export type Difficulty = "peaceful" | "easy" | "normal" | "hard";
+export type TimePreset = "morning" | "noon" | "evening" | "night" | "midnight";
+
+/** Vom Frontend angeforderte Aktion. Spieler werden immer per UUID angegeben. */
+export type ActionRequest =
+  | { type: "gamemode"; uuid: string; mode: Exclude<GameMode, "unknown"> }
+  | { type: "heal"; uuid: string }
+  | { type: "feed"; uuid: string }
+  | { type: "tp_player"; uuid: string; target: string }
+  | { type: "tp_coords"; uuid: string; dimension: string; x: number; y: number; z: number }
+  /** auf den höchsten festen Block bei x/z (Karte); maxY begrenzt die Suche (Nether) */
+  | { type: "tp_surface"; uuid: string; dimension: string; x: number; z: number; maxY?: number }
+  | { type: "give"; uuid: string; item: string; count: number }
+  | { type: "clear"; uuid: string }
+  | { type: "kick"; uuid: string; reason?: string }
+  | { type: "ban"; uuid: string; reason?: string }
+  | { type: "op"; uuid: string }
+  | { type: "deop"; uuid: string }
+  | { type: "pardon"; name: string }
+  | { type: "pardon_ip"; ip: string }
+  | { type: "time"; preset: TimePreset }
+  | { type: "weather"; weather: WeatherKind }
+  | { type: "difficulty"; difficulty: Difficulty }
+  | { type: "gamerule"; rule: string; value: boolean | number }
+  | { type: "say"; text: string }
+  | { type: "title"; text: string; subtitle?: string }
+  | { type: "msg"; uuid: string; text: string };
+
+export interface ActionResult {
+  ok: boolean;
+  /** Beschreibung, z. B. „Spielmodus von Alex → Kreativ“ */
+  label: string;
+  commands: string[];
+  output: string;
+}
+
+export interface GameruleState {
+  /** Schlüssel aus GAMERULES (stabil, unabhängig von der Server-Version) */
+  key: string;
+  /** tatsächlicher Name auf dem Server (z. B. keep_inventory oder keepInventory) */
+  name: string;
+  value: boolean | number;
+}
+
+export interface WorldState {
+  /** Tageszeit in Ticks (0–23999) */
+  daytime: number | null;
+  day: number | null;
+  weather: WeatherKind | null;
+  difficulty: Difficulty | null;
+  gamerules: GameruleState[];
+  /** im Dashboard hinterlegter Weltspawn (lässt sich per RCON nicht auslesen) */
+  worldSpawn: Vec3 | null;
+}
+
+export interface BanEntry {
+  target: string;
+  source: string;
+  reason: string;
+}
+
+export interface BanLists {
+  players: BanEntry[];
+  ips: BanEntry[];
+}
+
+export interface AuditEntry {
+  id: number;
+  at: number;
+  source: "action" | "console";
+  label: string;
+  command: string;
+  ok: boolean;
+  output: string;
+}
+
+export interface ItemInfo {
+  id: string;
+  name: string;
+}

@@ -5,6 +5,7 @@
   import { live } from "../lib/live.svelte";
   import { router } from "../lib/router.svelte";
   import Inventory from "./Inventory.svelte";
+  import PlayerActions from "./PlayerActions.svelte";
   import StatBar from "./StatBar.svelte";
 
   let { uuid, onback }: { uuid: string; onback?: () => void } = $props();
@@ -124,9 +125,11 @@
         </div>
       {/if}
 
+      <PlayerActions {detail} data={d} />
       <Inventory data={d} />
     {:else}
       <div class="panel muted">Für diesen Spieler liegen noch keine Inventardaten vor.</div>
+      <PlayerActions {detail} data={null} />
     {/if}
   {:else}
     <div class="muted">Lade …</div>
@@ -205,6 +208,9 @@
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .panel.muted {
     margin-bottom: 12px;
   }
   .panel.warn {

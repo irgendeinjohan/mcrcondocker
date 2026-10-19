@@ -1,6 +1,7 @@
 // Integrationstest: kompletter Stack (Fastify → Poller → RCON-Client → Mock-RCON-Server → MockWorld)
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { ActionService } from "../../src/server/actions.js";
 import { buildApp } from "../../src/server/app.js";
 import { Assets } from "../../src/server/assets.js";
 import { loadConfig } from "../../src/server/config.js";
@@ -23,9 +24,10 @@ let rcon: RconClient;
 let poller: Poller;
 let repo: Repo;
 let cookie = "";
+let world: MockWorld;
 
 beforeAll(async () => {
-  const world = new MockWorld();
+  world = new MockWorld();
   mock = await startMockRconServer({ password: RCON_PW, handler: (c) => world.handle(c) });
   const config = loadConfig({
     DASHBOARD_PASSWORD: DASH_PW,
@@ -40,8 +42,9 @@ beforeAll(async () => {
   const diag = new Diagnostics();
   rcon = new RconClient({ host: "127.0.0.1", port: mock.port, password: RCON_PW });
   poller = new Poller(rcon, repo, new SessionTracker(repo), diag, { pollIntervalMs: 60_000, perfIntervalMs: 1000, floodgatePrefix: ".", mock: false, version: "test" });
-  const consoleService = new ConsoleService(rcon, diag, []);
-  app = await buildApp({ config, repo, poller, console: consoleService, diag, rcon, assets: new Assets("/nonexistent"), version: "test", webRoot: "/nonexistent" });
+  const actions = new ActionService(rcon, repo, diag, { nameOf: (u) => poller.nameOf(u) });
+  const consoleService = new ConsoleService(rcon, diag, [], (cmd, ok, out) => actions.audit("console", cmd, cmd, ok, out));
+  app = await buildApp({ config, repo, poller, console: consoleService, actions, diag, rcon, assets: new Assets("/nonexistent"), version: "test", webRoot: "/nonexistent" });
   rcon.start();
   await rcon.waitForConnected();
   poller.start();
@@ -168,6 +171,120 @@ describe("API", () => {
     // auch das richtige Passwort wird während der Sperre abgelehnt
     expect((await app.inject({ method: "POST", url: "/api/login", headers: json, payload: { password: DASH_PW }, remoteAddress: "10.9.9.9" })).statusCode).toBe(429);
   }, 20_000);
+});
+
+describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
+  const alex = "36532b5e-c442-3dbb-a24c-c7e55d0f979a";
+  const steve = "00000000-0000-0000-0009-01f5f0fa4c3b";
+  const act = (action: unknown, confirmed = false) =>
+    app.inject({ method: "POST", url: "/api/action", headers: { ...json, cookie }, payload: { action, confirmed } });
+  const mock = () => world.players.find((p) => p.uuid === alex)!;
+
+  beforeAll(async () => {
+    const r = await app.inject({ method: "POST", url: "/api/login", headers: json, payload: { password: DASH_PW } });
+    cookie = String(r.headers["set-cookie"]).split(";")[0]!;
+  });
+
+  it("Spielmodus setzen", async () => {
+    const r = await act({ type: "gamemode", uuid: alex, mode: "creative" });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ ok: true, label: "Spielmodus von Alex → Kreativ", commands: [`gamemode creative ${alex}`] });
+    expect(mock().gameMode).toBe(1);
+    await act({ type: "gamemode", uuid: alex, mode: "survival" });
+  });
+
+  it("Heilen, Teleport zu Spieler und Koordinaten, Oberfläche (Karte)", async () => {
+    mock().health = 3;
+    expect((await act({ type: "heal", uuid: alex })).json().ok).toBe(true);
+    expect(mock().health).toBe(20);
+    expect((await act({ type: "tp_player", uuid: alex, target: steve })).json().ok).toBe(true);
+    expect(mock().pos).toEqual(world.players.find((p) => p.uuid === steve)!.pos);
+    await act({ type: "tp_coords", uuid: alex, dimension: "minecraft:the_nether", x: 10, y: 70, z: -20.5 });
+    expect([mock().dimension, ...mock().pos]).toEqual(["minecraft:the_nether", 10, 70, -20.5]);
+    const r = (await act({ type: "tp_surface", uuid: alex, dimension: "minecraft:the_nether", x: 100.7, z: -3.2, maxY: 120 })).json();
+    expect(r.commands).toEqual([`execute in minecraft:the_nether run spreadplayers 100.5 -3.5 0 1 under 120 false ${alex}`]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("Items geben, Fehler vom Server wird erkannt", async () => {
+    expect((await act({ type: "give", uuid: alex, item: "torch", count: 64 })).json()).toMatchObject({ ok: true, commands: [`give ${alex} minecraft:torch 64`] });
+    expect((await act({ type: "give", uuid: alex, item: "minecraft:Gibts-Nicht", count: 1 })).statusCode).toBe(400);
+    expect((await act({ type: "give", uuid: alex, item: "torch", count: 0 })).statusCode).toBe(400);
+  });
+
+  it("gefährliche Aktionen brauchen eine Bestätigung", async () => {
+    const r = await act({ type: "ban", uuid: alex, reason: "Test" });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().needsConfirmation).toBe(true);
+    expect(world.bans.has("Alex")).toBe(false);
+    expect((await act({ type: "ban", uuid: alex, reason: "Test" }, true)).json()).toMatchObject({ ok: true, commands: ["ban Alex Test"] });
+    expect(world.bans.get("Alex")).toBe("Test");
+  });
+
+  it("Bann-Liste lesen und entbannen", async () => {
+    const r = await app.inject({ url: "/api/bans", headers: { cookie } });
+    expect(r.json().players).toEqual([
+      { target: "Griefer123", source: "Rcon", reason: "Hat das Dorf angezündet" },
+      { target: "Alex", source: "Rcon", reason: "Test" },
+    ]);
+    expect((await act({ type: "pardon", name: "Alex" })).json().ok).toBe(true);
+    expect((await act({ type: "pardon", name: "Alex" })).json().ok).toBe(false); // „Nothing changed“
+    expect((await act({ type: "pardon", name: "Alex; stop" })).statusCode).toBe(400);
+  });
+
+  it("Welt: Zeit, Wetter, Schwierigkeit, Gamerules (neue Namen)", async () => {
+    await act({ type: "time", preset: "midnight" });
+    await act({ type: "weather", weather: "thunder" });
+    const w = (await app.inject({ url: "/api/world", headers: { cookie } })).json();
+    expect(w.daytime).toBeGreaterThanOrEqual(18000);
+    expect(w.daytime).toBeLessThan(18100);
+    expect(w.weather).toBe("thunder");
+    expect(w.difficulty).toBe("normal");
+    expect(w.gamerules.find((g: { key: string }) => g.key === "keepInventory")).toEqual({ key: "keepInventory", name: "keep_inventory", value: false });
+    expect(w.gamerules.find((g: { key: string }) => g.key === "playersSleepingPercentage").value).toBe(100);
+    expect((await act({ type: "gamerule", rule: "keep_inventory", value: true })).statusCode).toBe(409);
+    expect((await act({ type: "gamerule", rule: "keep_inventory", value: true }, true)).json().ok).toBe(true);
+    expect(world.gamerules.get("keep_inventory")).toBe("true");
+    expect((await act({ type: "gamerule", rule: "doesNotExist", value: true }, true)).statusCode).toBe(400);
+  });
+
+  it("Gamerules mit alten Namen (vor 1.21.11)", async () => {
+    for (const [k, v] of [...world.gamerules]) {
+      world.gamerules.delete(k);
+      if (k === "keep_inventory") world.gamerules.set("keepInventory", v);
+    }
+    const w = (await app.inject({ url: "/api/world", headers: { cookie } })).json();
+    // Name war schon aufgelöst → neuer Versuch mit allen Kandidaten im nächsten Abruf
+    const w2 = (await app.inject({ url: "/api/world", headers: { cookie } })).json();
+    expect([...w.gamerules, ...w2.gamerules].find((g: { key: string }) => g.key === "keepInventory")?.name).toBe("keepInventory");
+  });
+
+  it("Nachrichten: Titel mit Untertitel, private Nachricht", async () => {
+    const r = (await act({ type: "title", text: 'Hallo "Welt"', subtitle: "Neustart in 5 min" })).json();
+    expect(r.commands).toEqual(["title @a times 10 70 20", 'title @a subtitle "Neustart in 5 min"', 'title @a title "Hallo \\"Welt\\""']);
+    expect((await act({ type: "msg", uuid: alex, text: "Hi\nstop" })).json().commands).toEqual([`msg ${alex} Hi stop`]);
+    expect((await act({ type: "say", text: "" })).statusCode).toBe(400);
+  });
+
+  it("Weltspawn hinterlegen", async () => {
+    const r = await app.inject({ method: "POST", url: "/api/world/spawn", headers: { ...json, cookie }, payload: { spawn: { x: 1, y: 70, z: -2 } } });
+    expect(r.json()).toEqual({ worldSpawn: { x: 1, y: 70, z: -2 } });
+    expect((await app.inject({ url: "/api/world", headers: { cookie } })).json().worldSpawn).toEqual({ x: 1, y: 70, z: -2 });
+  });
+
+  it("Aktionsprotokoll enthält Aktionen und Konsolenbefehle", async () => {
+    await app.inject({ method: "POST", url: "/api/console", headers: { ...json, cookie }, payload: { command: "seed" } });
+    const log = (await app.inject({ url: "/api/audit?limit=50", headers: { cookie } })).json();
+    expect(log[0]).toMatchObject({ source: "console", command: "seed", ok: true });
+    expect(log.some((e: { label: string }) => e.label === "Alex gebannt (Test)")).toBe(true);
+    expect(log.some((e: { ok: boolean; label: string }) => !e.ok && e.label === "Alex entbannt")).toBe(true);
+  });
+
+  it("Todespunkt aus den Spielerdaten", async () => {
+    await poller.cycle();
+    const d = (await app.inject({ url: `/api/players/${alex}`, headers: { cookie } })).json() as PlayerDetail;
+    expect(d.data?.lastDeath).toEqual({ dimension: "minecraft:overworld", pos: { x: 98, y: 63, z: -322 } });
+  });
 });
 
 describe("Server ohne /tps und /mspt (Vanilla/Fabric/Spigot)", () => {

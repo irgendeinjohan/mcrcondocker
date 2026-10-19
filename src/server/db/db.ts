@@ -44,6 +44,19 @@ const MIGRATIONS: string[] = [
     expires_at INTEGER NOT NULL
   );
   `,
+  // 2: Aktionsprotokoll
+  `
+  CREATE TABLE audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    label TEXT NOT NULL,
+    command TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    output TEXT NOT NULL
+  );
+  CREATE INDEX audit_log_at ON audit_log(at);
+  `,
 ];
 
 export type Db = DatabaseSync;
