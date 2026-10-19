@@ -1,11 +1,13 @@
 // Gemeinsamer Live-Zustand, gespeist aus Server-Sent Events.
-import type { ConsoleEntry, LiveEvent, PlayerSummary, ServerStatus } from "../../shared/types";
+import type { AuditEntry, ConsoleEntry, LiveEvent, PlayerSummary, ServerStatus } from "../../shared/types";
 import { api, type AssetsInfo } from "./api";
 
 class LiveState {
   status = $state<ServerStatus | null>(null);
   players = $state<PlayerSummary[]>([]);
   console = $state<ConsoleEntry[]>([]);
+  /** neue Protokolleinträge seit dem Verbinden (neueste zuerst) */
+  audit = $state<AuditEntry[]>([]);
   /** SSE-Verbindung zum Dashboard selbst (nicht RCON) */
   liveConnected = $state(false);
   assets = $state<AssetsInfo | null>(null);
@@ -44,6 +46,8 @@ class LiveState {
       else if (ev.type === "players") this.players = ev.players;
       else if (ev.type === "console") {
         if (!this.console.some((c) => c.id === ev.entry.id)) this.console = [...this.console, ev.entry].slice(-200);
+      } else if (ev.type === "audit") {
+        if (!this.audit.some((a) => a.id === ev.entry.id)) this.audit = [ev.entry, ...this.audit].slice(0, 200);
       }
     };
   }

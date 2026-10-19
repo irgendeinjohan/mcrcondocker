@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PlayerSummary } from "../../shared/types";
+  import { actions } from "../lib/actions.svelte";
   import { coord, DIMENSIONS, dimColor, dimLabel } from "../lib/format";
   import { live } from "../lib/live.svelte";
   import { router } from "../lib/router.svelte";
@@ -9,6 +10,11 @@
   let wrap = $state<HTMLDivElement | undefined>();
   let showOffline = $state(readBool(STORAGE_KEY, true));
   let cursor = $state<{ x: number; z: number } | null>(null);
+  /** Teleport-Menü nach Rechtsklick / langem Tippen */
+  let tpMenu = $state<{ x: number; z: number } | null>(null);
+  let tpPlayer = $state("");
+  let tpY = $state("");
+  const onlinePlayers = $derived(live.players.filter((p) => p.online));
 
   // Ansicht pro Dimension merken
   const views = new Map<string, { cx: number; cz: number; scale: number }>();
@@ -102,7 +108,7 @@
   $effect(() => {
     if (!canvas) return;
     // Abhängigkeiten
-    void [cx, cz, scale, size.w, size.h, visible, dim];
+    void [cx, cz, scale, size.w, size.h, visible, dim, tpMenu];
     draw();
   });
 
@@ -152,6 +158,20 @@
     g.beginPath();
     g.arc(o.sx, o.sy, 3, 0, Math.PI * 2);
     g.fill();
+
+    // Ziel des Teleport-Menüs
+    if (tpMenu) {
+      const t = toScreen(tpMenu.x, tpMenu.z);
+      g.strokeStyle = "#ffd54a";
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(t.sx, t.sy, 9, 0, Math.PI * 2);
+      g.moveTo(t.sx - 14, t.sy);
+      g.lineTo(t.sx + 14, t.sy);
+      g.moveTo(t.sx, t.sy - 14);
+      g.lineTo(t.sx, t.sy + 14);
+      g.stroke();
+    }
 
     // Spieler
     g.textBaseline = "middle";
@@ -219,6 +239,38 @@
   let downAt: { x: number; y: number; t: number } | null = null;
   let moved = false;
   let pinchDist = 0;
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let longPressed = false;
+
+  function cancelPress(): void {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+  }
+
+  function openTpMenu(sx: number, sy: number): void {
+    const w = toWorld(sx, sy);
+    tpMenu = { x: Math.floor(w.x), z: Math.floor(w.z) };
+    if (!onlinePlayers.some((p) => p.uuid === tpPlayer)) tpPlayer = onlinePlayers[0]?.uuid ?? "";
+  }
+
+  function onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    const r = canvas!.getBoundingClientRect();
+    openTpMenu(e.clientX - r.left, e.clientY - r.top);
+  }
+
+  async function teleport(): Promise<void> {
+    if (!tpMenu || !tpPlayer) return;
+    const y = tpY.trim() === "" ? null : Number(tpY.replace(",", "."));
+    if (y !== null && !Number.isFinite(y)) return;
+    const target = tpMenu;
+    const r = await actions.run(
+      y === null
+        ? { type: "tp_surface", uuid: tpPlayer, dimension: dim, x: target.x, z: target.z, maxY: dim === "minecraft:the_nether" ? 120 : undefined }
+        : { type: "tp_coords", uuid: tpPlayer, dimension: dim, x: target.x + 0.5, y, z: target.z + 0.5 },
+    );
+    if (r?.ok) tpMenu = null;
+  }
 
   function local(e: PointerEvent | WheelEvent) {
     const r = canvas!.getBoundingClientRect();
@@ -232,7 +284,20 @@
     if (pointers.size === 1) {
       downAt = { ...p, t: Date.now() };
       moved = false;
+      longPressed = false;
+      cancelPress();
+      // langes Tippen (Touch) öffnet das Teleport-Menü; Maus nutzt Rechtsklick
+      if (e.pointerType !== "mouse") {
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          if (!moved && downAt) {
+            longPressed = true;
+            openTpMenu(downAt.x, downAt.y);
+          }
+        }, 550);
+      }
     } else if (pointers.size === 2) {
+      cancelPress();
       const [a, b] = [...pointers.values()];
       pinchDist = Math.hypot(a!.x - b!.x, a!.y - b!.y);
       moved = true;
@@ -247,7 +312,10 @@
     pointers.set(e.pointerId, p);
     if (pointers.size === 1) {
       const dx = p.x - prev.x, dy = p.y - prev.y;
-      if (downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) > 5) moved = true;
+      if (downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) > 5) {
+        moved = true;
+        cancelPress();
+      }
       cx -= dx / scale;
       cz -= dy / scale;
       if (dx || dy) userMoved = true;
@@ -263,7 +331,11 @@
     const p = local(e);
     pointers.delete(e.pointerId);
     if (pointers.size < 2) pinchDist = 0;
-    if (pointers.size === 0 && !moved && downAt) hit(p.x, p.y);
+    cancelPress();
+    if (pointers.size === 0 && !moved && !longPressed && downAt && e.button !== 2) {
+      if (tpMenu) tpMenu = null;
+      else hit(p.x, p.y);
+    }
     if (pointers.size === 0) downAt = null;
   }
 
@@ -327,7 +399,40 @@
       onpointercancel={onUp}
       onpointerleave={() => (cursor = null)}
       onwheel={onWheel}
+      oncontextmenu={onContextMenu}
     ></canvas>
+    {#if tpMenu}
+      {@const pos = toScreen(tpMenu.x, tpMenu.z)}
+      <form
+        class="tp-menu panel"
+        style:left={`${Math.max(8, Math.min(pos.sx + 16, size.w - 268))}px`}
+        style:top={`${Math.max(8, Math.min(pos.sy + 16, size.h - 190))}px`}
+        onsubmit={(e) => {
+          e.preventDefault();
+          void teleport();
+        }}
+      >
+        <div class="tp-title">Teleport nach X {coord(tpMenu.x)} · Z {coord(tpMenu.z)}</div>
+        {#if onlinePlayers.length}
+          <select bind:value={tpPlayer} aria-label="Spieler">
+            {#each onlinePlayers as p (p.uuid)}
+              <option value={p.uuid}>{p.name}{p.dimension && p.dimension !== dim ? ` (${dimLabel(p.dimension)})` : ""}</option>
+            {/each}
+          </select>
+          <input inputmode="decimal" placeholder="Y (leer = auf den Boden)" aria-label="Y" bind:value={tpY} />
+          {#if dim === "minecraft:the_nether" && !tpY.trim()}
+            <div class="faint tp-hint">Im Nether wird unterhalb von Y 120 gesucht.</div>
+          {/if}
+          <div class="tp-btns">
+            <button class="btn small" type="button" onclick={() => (tpMenu = null)}>Abbrechen</button>
+            <button class="btn small primary" type="submit" disabled={!tpPlayer || actions.busy > 0}>Teleportieren</button>
+          </div>
+        {:else}
+          <div class="faint">Niemand online.</div>
+          <div class="tp-btns"><button class="btn small" type="button" onclick={() => (tpMenu = null)}>Schließen</button></div>
+        {/if}
+      </form>
+    {/if}
     <div class="hud mono">
       {#if cursor}X {coord(Math.floor(cursor.x))} · Z {coord(Math.floor(cursor.z))}{:else}Mitte X {coord(Math.round(cx))} · Z {coord(Math.round(cz))}{/if}
       · {scale >= 1 ? `${Math.round(scale * 10) / 10} px/Block` : `1 px = ${Math.round(1 / scale)} Blöcke`}
@@ -341,6 +446,7 @@
     <span><span class="lg br"></span>Bedrock</span>
     <span><span class="lg off"></span>offline (letzte Position)</span>
     <span>Norden ist oben (−Z)</span>
+    <span>Rechtsklick / lange tippen: Spieler dorthin teleportieren</span>
   </div>
 </div>
 
@@ -422,6 +528,33 @@
     border-radius: 6px;
     font-size: 12px;
     pointer-events: none;
+  }
+  .tp-menu {
+    position: absolute;
+    width: 260px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 5;
+  }
+  .tp-menu select,
+  .tp-menu input {
+    padding: 4px 8px;
+    font-size: 16px;
+  }
+  .tp-title {
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .tp-hint {
+    font-size: 12px;
+  }
+  .tp-btns {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
   }
   .empty {
     position: absolute;

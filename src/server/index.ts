@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
+import { ActionService } from "./actions.js";
 import { Assets } from "./assets.js";
 import { ConfigError, loadConfig } from "./config.js";
 import { ConsoleService } from "./console.js";
@@ -62,8 +63,9 @@ async function main(): Promise<void> {
     mock: config.mock,
     version,
   }, assets.translate);
-  const consoleService = new ConsoleService(rcon, diag, config.extraDangerous);
-  const app = await buildApp({ config, repo, poller, console: consoleService, diag, rcon, assets, version });
+  const actions = new ActionService(rcon, repo, diag, { nameOf: (uuid) => poller.nameOf(uuid) });
+  const consoleService = new ConsoleService(rcon, diag, config.extraDangerous, (cmd, ok, out) => actions.audit("console", cmd, cmd, ok, out));
+  const app = await buildApp({ config, repo, poller, console: consoleService, actions, diag, rcon, assets, version });
 
   rcon.on("state", (s: string, err: string | null) => app.log.info(`RCON: ${s}${err ? ` (${err})` : ""}`));
   rcon.start();

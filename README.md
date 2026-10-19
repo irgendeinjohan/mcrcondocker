@@ -40,6 +40,11 @@ Spieler, Inventare, Karte, Konsole und Online-Zeiten auf einen Blick – im Brow
 | 🎒 **Inventare wie im Spiel** | Inventar mit Hotbar, Rüstung, Offhand und Enderkiste als Raster. Der Tooltip zeigt Name, Anzahl, Verzauberungen, eigenen Namen, Haltbarkeit, Lore und den Inhalt von Shulkerkisten und Bündeln |
 | 💾 **Offline-Stand** | Letztes bekanntes Inventar und letzte Position jedes Spielers mit Zeitstempel, auch wenn er offline ist |
 | 🗺️ **2D-Karte** | Koordinatenraster mit Zoom und Verschieben (Maus und Touch), Tabs für Oberwelt, Nether und Ende, Spieler als Punkte. Ein Klick öffnet die Details |
+| 🎮 **Spieler-Aktionen** | Spielmodus umschalten, heilen, sättigen, teleportieren (zu Spielern, zu Koordinaten, zum Todespunkt, Bett oder Weltspawn, andere herholen), Items mit Suche geben, Inventar leeren, private Nachricht, kicken, bannen, OP geben/entziehen |
+| 🌍 **Welt** | Ingame-Uhrzeit anzeigen und setzen, Wetter, Schwierigkeit, wichtige Gamerules als Schalter (keepInventory, Mob-Griefing, Phantome, Schlaf-Prozent …) |
+| 📣 **Nachrichten & Banns** | Chat-Nachricht oder große Titel-Einblendung an alle, Bann-Liste mit „Entbannen“ |
+| 📜 **Aktionsprotokoll** | Was wurde wann über das Dashboard ausgeführt (Aktionen und Konsolenbefehle) |
+| 📍 **Klick-Teleport** | Auf der Karte rechtsklicken oder lange tippen und einen Spieler dorthin teleportieren |
 | ⌨️ **Konsole** | Befehle per RCON senden, Minecraft-Farbcodes (§) werden dargestellt, Verlauf mit ↑/↓. Gefährliche Befehle (`stop`, `op`, `ban`, `kill`, `whitelist` …, auch innerhalb von `execute … run`) verlangen eine Bestätigung |
 | ⏱️ **Online-Zeiten** | Sessions (Login/Logout), Gesamtzeit pro Spieler, „zuletzt gesehen“ |
 | ⏸️ **Pause-Schalter** | Stoppt alle automatischen Abfragen, auch über Neustarts hinweg. Die Konsole funktioniert weiter |
@@ -200,6 +205,9 @@ docker build -t mc-dashboard .
 
 - **Spieler:** Links die Liste (online zuerst), rechts Details und Inventar. Fahre mit der Maus über ein Item oder tippe darauf, um den Tooltip zu sehen. Offline-Spieler zeigen „Stand: …“ mit dem Zeitpunkt der letzten Daten.
 - **Karte:** Mausrad oder zwei Finger zum Zoomen, ziehen zum Verschieben, „Einpassen“ zeigt alle Spieler. Norden (−Z) ist oben. Offline-Spieler erscheinen als hohle Punkte an ihrer letzten Position.
+- **Aktionen (Spielerseite):** Unter den Werten eines Spielers. Kicken, Bannen, OP, Inventar leeren, Gamerules und Schwierigkeit fragen vorher nach. Für „Zum Weltspawn“ die Koordinaten einmal auf der Welt-Seite hinterlegen (der Weltspawn lässt sich per RCON nicht auslesen).
+- **Welt:** Uhrzeit, Wetter, Schwierigkeit, Gamerules, Nachrichten an alle, Bann-Liste und das Aktionsprotokoll. Gamerules, die der Server nicht kennt, werden ausgeblendet. Die neuen Namen ab 1.21.11 (`keep_inventory`) und die alten (`keepInventory`) werden beide erkannt.
+- **Klick-Teleport:** Auf der Karte rechtsklicken (Handy: lange tippen), Spieler wählen, „Teleportieren“. Ohne Y-Wert landet der Spieler auf dem höchsten sicheren Block, im Nether unterhalb von Y 120.
 - **Konsole:** Befehle ohne `/` eingeben, ↑/↓ blättert durch den Verlauf. Bei gefährlichen Befehlen erscheint ein Bestätigungsdialog.
 - **Zeiten:** Gesamtzeit pro Spieler, letzte Sessions und Lücken in der Erfassung.
 - **⏸ Pausieren:** stoppt alle automatischen Abfragen, zum Beispiel bei Wartungsarbeiten. In dieser Zeit ist unbekannt, wer online war. Diese Zeit wird als **Lücke** gespeichert und **nicht** als offline gezählt. Dasselbe gilt für Verbindungsfehler und Zeiten, in denen das Dashboard selbst nicht lief.
@@ -225,7 +233,7 @@ Ohne weitere Dateien zeigt das Dashboard farbige Kacheln mit Kurznamen (z. B. �
    | macOS | `~/Library/Application Support/minecraft/versions/<Version>/<Version>.jar` |
    | Linux | `~/.minecraft/versions/<Version>/<Version>.jar` |
 
-3. Den Container neu starten. Auf der Debug-Seite steht dann „Texturen: jar“. Die Item-Namen kommen jetzt aus der englischen Sprachdatei des Spiels.
+3. Den Container neu starten. Auf der Debug-Seite steht dann „Texturen: jar“. Die Item-Namen kommen jetzt aus der englischen Sprachdatei des Spiels. Mit einer Sprachdatei gibt es beim „Items geben“ außerdem eine Suche mit Bildern, ohne sie gibst du die Item-ID ein (z. B. `torch`).
 
 Alternativ kannst du einen entpackten Ordner `data/assets/textures/item/*.png` (und `…/block/*.png`) verwenden.
 

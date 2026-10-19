@@ -4,6 +4,7 @@
   import { live } from "./lib/live.svelte";
   import { router } from "./lib/router.svelte";
   import { tooltip } from "./lib/tooltip.svelte";
+  import ActionHost from "./components/ActionHost.svelte";
   import ConsoleView from "./components/ConsoleView.svelte";
   import DebugView from "./components/DebugView.svelte";
   import ItemTooltip from "./components/ItemTooltip.svelte";
@@ -13,6 +14,7 @@
   import PlayersView from "./components/PlayersView.svelte";
   import SessionsView from "./components/SessionsView.svelte";
   import TopBar from "./components/TopBar.svelte";
+  import WorldView from "./components/WorldView.svelte";
 
   let auth = $state<"unknown" | "in" | "out">("unknown");
   let mock = $state(false);
@@ -68,6 +70,8 @@
       <PlayersView />
     {:else if router.view === "map"}
       <MapView />
+    {:else if router.view === "world"}
+      <WorldView />
     {:else if router.view === "console"}
       <ConsoleView />
     {:else if router.view === "sessions"}
@@ -77,6 +81,7 @@
     {/if}
   </main>
   <ItemTooltip />
+  <ActionHost />
 {/if}
 
 <style>

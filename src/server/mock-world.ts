@@ -79,6 +79,8 @@ interface MockPlayer {
   items: MockItem[];
   armor: Armor;
   ender: MockItem[];
+  /** letzter Todespunkt: Dimension, x, y, z */
+  death?: [string, number, number, number];
   /** zeitweise online: Periode/Onlinedauer in ms */
   schedule?: { period: number; online: number };
   speed: number;
@@ -103,7 +105,7 @@ export class MockWorld {
     player({
       name: "Alex", uuid: "36532b5e-c442-3dbb-a24c-c7e55d0f979a", uuidInts: "[I;911420254,-1002291269,-1574893685,-1388806246]",
       dimension: "minecraft:overworld", pos: [120.5, 64, -340.25], health: 14.5, food: 18, xp: 30, gameMode: 0,
-      items: ALEX_ITEMS, armor: ARMOR_FULL,
+      items: ALEX_ITEMS, armor: ARMOR_FULL, death: ["minecraft:overworld", 98, 63, -322],
       ender: [it(0, `components:{"minecraft:potion_contents":{potion:"minecraft:strong_healing"}},count:1,id:"minecraft:potion"`), it(26, `count:64,id:"minecraft:diamond_block"`)],
     }),
     player({
@@ -134,7 +136,152 @@ export class MockWorld {
     }),
   ];
 
+  // Welt- und Serverzustand für die Dashboard-Aktionen
+  private timeBase = 1000;
+  private timeSetAt = Date.now();
+  private weather: "clear" | "rain" | "thunder" = "clear";
+  private difficulty = "normal";
+  readonly gamerules = new Map<string, string>([
+    ["keep_inventory", "false"], ["mob_griefing", "true"], ["advance_time", "true"], ["advance_weather", "true"],
+    ["spawn_mobs", "true"], ["spawn_phantoms", "true"], ["fire_spread_radius_around_player", "128"], ["pvp", "true"],
+    ["natural_health_regeneration", "true"], ["fall_damage", "true"], ["immediate_respawn", "false"],
+    ["show_death_messages", "true"], ["show_advancement_messages", "true"], ["locator_bar", "true"],
+    ["players_sleeping_percentage", "100"],
+  ]);
+  readonly bans = new Map<string, string>([["Griefer123", "Hat das Dorf angezündet"]]);
+  readonly ipBans = new Map<string, string>();
+  readonly ops = new Set<string>();
+
   constructor(private readonly oldFormat = false) {}
+
+  private totalTicks(): number {
+    const running = this.gamerules.get("advance_time") !== "false";
+    return this.timeBase + (running ? Math.floor((Date.now() - this.timeSetAt) / 50) : 0);
+  }
+
+  private static readonly MODES: Record<string, [number, string]> = {
+    survival: [0, "Survival Mode"], creative: [1, "Creative Mode"], adventure: [2, "Adventure Mode"], spectator: [3, "Spectator Mode"],
+  };
+
+  /** Befehle, die das Dashboard für Aktionen und die Welt-Seite verwendet */
+  private handleAdmin(cmd: string): string | null {
+    let m: RegExpExecArray | null;
+    if ((m = /^gamemode (\w+) (\S+)$/i.exec(cmd))) {
+      const mode = MockWorld.MODES[m[1]!.toLowerCase()];
+      const p = this.find(m[2]!);
+      if (!mode) return `Incorrect argument for command\n...<--[HERE]`;
+      if (!p) return "No player was found";
+      p.gameMode = mode[0];
+      return `Set ${p.name}'s game mode to ${mode[1]}`;
+    }
+    if ((m = /^effect give (\S+) minecraft:(instant_health|saturation) /i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      if (!p) return "No entity was found";
+      if (m[2] === "instant_health") p.health = 20;
+      else p.food = 20;
+      return `Applied effect ${m[2] === "instant_health" ? "Instant Health" : "Saturation"} to ${p.name}`;
+    }
+    if ((m = /^tp (\S+) (\S+)$/i.exec(cmd))) {
+      const [p, t] = [this.find(m[1]!), this.find(m[2]!)];
+      if (!p || !t) return "No entity was found";
+      p.dimension = t.dimension;
+      p.pos = [...t.pos];
+      return `Teleported ${p.name} to ${t.name}`;
+    }
+    if ((m = /^execute in (\S+) run tp (\S+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)$/i.exec(cmd))) {
+      const p = this.find(m[2]!);
+      if (!p) return "No entity was found";
+      p.dimension = m[1]!;
+      p.pos = [Number(m[3]), Number(m[4]), Number(m[5])];
+      return `Teleported ${p.name} to ${p.pos.map((v) => v.toFixed(6)).join(", ")}`;
+    }
+    if ((m = /^execute in (\S+) run spreadplayers (-?[\d.]+) (-?[\d.]+) 0 1(?: under (\d+))? false (\S+)$/i.exec(cmd))) {
+      const p = this.find(m[5]!);
+      if (!p) return "No entity was found";
+      p.dimension = m[1]!;
+      p.pos = [Number(m[2]), m[4] ? Math.min(Number(m[4]) - 10, 64) : 64, Number(m[3])];
+      return `Spread 1 player around ${m[2]}, ${m[3]} with an average distance of 0.00 blocks apart`;
+    }
+    if ((m = /^give (\S+) (\S+) (\d+)$/i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      if (!p) return "No player was found";
+      if (!/^minecraft:[a-z0-9_]+$/.test(m[2]!)) return `Unknown item '${m[2]}'`;
+      return `Gave ${m[3]} [${m[2]!.slice(10)}] to ${p.name}`;
+    }
+    if ((m = /^clear (\S+)$/i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      if (!p) return "No player was found";
+      const n = p.items.length;
+      p.items = [];
+      return `Removed ${n} item(s) from player ${p.name}`;
+    }
+    if ((m = /^kick (\S+)(?: (.*))?$/i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      return p ? `Kicked ${p.name}: ${m[2] ?? "Kicked by an operator"}` : "No player was found";
+    }
+    if ((m = /^ban (\S+)(?: (.*))?$/i.exec(cmd))) {
+      if (this.bans.has(m[1]!)) return "Nothing changed. The player is already banned";
+      this.bans.set(m[1]!, m[2] ?? "Banned by an operator.");
+      return `Banned ${m[1]}: ${m[2] ?? "Banned by an operator."}`;
+    }
+    if ((m = /^pardon (\S+)$/i.exec(cmd))) {
+      return this.bans.delete(m[1]!) ? `Unbanned ${m[1]}` : "Nothing changed. The player isn't banned";
+    }
+    if ((m = /^pardon-ip (\S+)$/i.exec(cmd))) {
+      return this.ipBans.delete(m[1]!) ? `Unbanned IP ${m[1]}` : "Nothing changed. That IP isn't banned";
+    }
+    if ((m = /^banlist (players|ips)$/i.exec(cmd))) {
+      const list = m[1] === "ips" ? this.ipBans : this.bans;
+      if (!list.size) return "There are no bans";
+      return [`There are ${list.size} ban(s):`, ...[...list].map(([n, r]) => `${n} was banned by Rcon: ${r}`)].join("\n");
+    }
+    if ((m = /^(op|deop) (\S+)$/i.exec(cmd))) {
+      const op = m[1]!.toLowerCase() === "op";
+      const had = this.ops.has(m[2]!);
+      if (op === had) return op ? "Nothing changed. The player already is an operator" : "Nothing changed. The player is not an operator";
+      if (op) this.ops.add(m[2]!);
+      else this.ops.delete(m[2]!);
+      return op ? `Made ${m[2]} a server operator` : `Made ${m[2]} no longer a server operator`;
+    }
+    if ((m = /^time set (\d+)$/i.exec(cmd))) {
+      const day = Math.floor(this.totalTicks() / 24000);
+      this.timeBase = day * 24000 + Number(m[1]);
+      this.timeSetAt = Date.now();
+      return `Set the time to ${m[1]}`;
+    }
+    if (/^time query daytime$/i.test(cmd)) return `The time is ${this.totalTicks() % 24000}`;
+    if (/^time query day$/i.test(cmd)) return `The time is ${Math.floor(this.totalTicks() / 24000)}`;
+    if ((m = /^weather (clear|rain|thunder)/i.exec(cmd))) {
+      this.weather = m[1]!.toLowerCase() as typeof this.weather;
+      return `Set the weather to ${this.weather === "clear" ? "clear" : this.weather === "rain" ? "rain" : "rain & thunder"}`;
+    }
+    if ((m = /^execute if predicate \{condition:"minecraft:weather_check",(raining|thundering):true\}$/i.exec(cmd))) {
+      const yes = m[1] === "thundering" ? this.weather === "thunder" : this.weather !== "clear";
+      return yes ? "Test passed" : "Test failed";
+    }
+    if (/^difficulty$/i.test(cmd)) return `The difficulty is ${this.difficulty[0]!.toUpperCase()}${this.difficulty.slice(1)}`;
+    if ((m = /^difficulty (peaceful|easy|normal|hard)$/i.exec(cmd))) {
+      if (this.difficulty === m[1]) return `The difficulty did not change; it is already set to ${m[1]}`;
+      this.difficulty = m[1]!.toLowerCase();
+      return `The difficulty has been set to ${this.difficulty[0]!.toUpperCase()}${this.difficulty.slice(1)}`;
+    }
+    if ((m = /^gamerule (\S+)(?: (\S+))?$/i.exec(cmd))) {
+      const name = m[1]!;
+      if (!this.gamerules.has(name)) return `Incorrect argument for command\n...gamerule ${name}<--[HERE]`;
+      if (m[2] !== undefined) {
+        this.gamerules.set(name, m[2]);
+        return `Gamerule ${name} is now set to: ${m[2]}`;
+      }
+      return `Gamerule ${name} is currently set to: ${this.gamerules.get(name)}`;
+    }
+    if (/^title @a (times|subtitle) /i.test(cmd)) return "";
+    if (/^title @a title /i.test(cmd)) return `Showing new title for ${this.online().length} players`;
+    if ((m = /^msg (\S+) (.+)$/i.exec(cmd))) {
+      const p = this.find(m[1]!);
+      return p ? `You whisper to ${p.name}: ${m[2]}` : "No player was found";
+    }
+    return null;
+  }
 
   private isOnline(p: MockPlayer, now = Date.now()): boolean {
     if (!p.schedule) return true;
@@ -180,6 +327,7 @@ export class MockWorld {
       `abilities:{flySpeed:0.05f,flying:0b,instabuild:${p.gameMode === 1 ? 1 : 0}b,invulnerable:${p.gameMode === 1 ? 1 : 0}b,mayBuild:1b,mayfly:${p.gameMode === 1 ? 1 : 0}b,walkSpeed:0.1f},` +
       `active_effects:[{amplifier:1b,duration:11996,id:"minecraft:speed",show_icon:1b}],` +
       `attributes:[{base:20.0d,id:"minecraft:max_health"},{base:0.10000000149011612d,id:"minecraft:movement_speed"}],` +
+      (p.death ? `LastDeathLocation:{dimension:${q(p.death[0])},pos:[I;${p.death.slice(1).join(",")}]},` : "") +
       `equipment:{${eq}},foodExhaustionLevel:0.0f,foodLevel:${p.food},foodSaturationLevel:2.0f,foodTickTimer:0,playerGameType:${p.gameMode},recipeBook:{},seenCredits:0b}`
     );
   }
@@ -237,15 +385,12 @@ export class MockWorld {
       const a = (8 + Math.random() * 10).toFixed(1);
       return `§6Server tick times §e(§7avg§e/§7min§e/§7max§e)§6 from last 5s§7,§6 10s§7,§6 1m§e:\n§6◴ §a${a}§7/§a2.1§7/§e41.3§e, §a9.8§7/§a2.0§7/§e44.0§e, §a10.2§7/§a1.9§7/§c63.5\n`;
     }
+    const admin = this.handleAdmin(cmd);
+    if (admin !== null) return admin;
     if (/^say /i.test(cmd)) return "";
     if (lower === "seed") return "Seed: [4046814556654922723]";
     if (lower === "time query gametime") return `The game time is ${Math.floor((Date.now() - this.started) / 50)} tick(s)`;
-    if (/^weather (clear|rain|thunder)/i.test(cmd)) return `Set the weather to ${cmd.split(" ")[1]}`;
     if (lower === "stop") return "Stopping the server (Mock – es passiert nichts)";
-    if (/^(kick|ban|op|deop) \S+/i.test(cmd)) {
-      const p = this.find(cmd.split(" ")[1]!);
-      return p ? `${cmd.split(" ")[0]} ${p.name}: Mock – keine Wirkung` : "No player was found";
-    }
     if (lower === "version") return "§fThis server is running Paper version 26.3-205-main@a90108f (Mock)\n";
     if (lower === "help") return "§e--------- §fHelp: Index (1/42) §e--------------------\n§7Use /help [n] to get page n of help.\n§6Aliases: §fLists command aliases\n§6Bukkit: §fAll commands for Bukkit";
     if (lower === "colors") return "§0schwarz §1dunkelblau §2dunkelgrün §3dunkeltürkis §4dunkelrot §5lila §6gold §7grau §8dunkelgrau §9blau §agrün §btürkis §crot §dpink §egelb §fweiß §lfett§r §oKursiv§r §nunterstrichen§r §mdurchgestrichen§r §x§f§f§8§8§0§0Hex-Orange";

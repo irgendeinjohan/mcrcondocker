@@ -8,6 +8,7 @@
 // Es wird nichts aus dem Internet geladen und nichts mitgeliefert.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import type { ItemInfo } from "../shared/types.js";
 import { ZipReader } from "./zip.js";
 
 const SAFE_ID = /^(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$/;
@@ -19,6 +20,10 @@ const ALIASES: Record<string, string[]> = {
   light: ["light_00"],
   bow: ["bow"],
 };
+
+/** Blöcke ohne eigenes Item (Wandvarianten, Flüssigkeiten, technische Blöcke) */
+const NOT_ITEMS =
+  /^(?:air|cave_air|void_air|water|lava|fire|soul_fire|moving_piston|piston_head|nether_portal|end_portal|end_gateway|bubble_column|frosted_ice|tall_seagrass|kelp_plant|bamboo_sapling|sweet_berry_bush|cocoa|carrots|potatoes|beetroots|melon_stem|pumpkin_stem|attached_.*|potted_.*|.*_wall_(?:torch|sign|banner|head|skull|fan|hanging_sign)|wall_torch|.*_cauldron|redstone_wire|tripwire|big_dripleaf_stem|cave_vines_plant|twisting_vines_plant|weeping_vines_plant|.*_candle_cake|structure_void|jigsaw|test_block|test_instance_block)$/;
 
 export interface AssetsInfo {
   textures: "folder" | "jar" | null;
@@ -103,6 +108,25 @@ export class Assets {
   }
 
   translate = (key: string): string | undefined => this.lang[key];
+
+  private itemList: ItemInfo[] | null = null;
+
+  /**
+   * Items für die Auswahl beim Geben, aus der Sprachdatei abgeleitet
+   * (item.minecraft.* und block.minecraft.*). Ohne Sprachdatei leer.
+   */
+  items(): ItemInfo[] {
+    if (this.itemList) return this.itemList;
+    const byId = new Map<string, string>();
+    for (const [key, name] of Object.entries(this.lang)) {
+      const m = /^(item|block)\.minecraft\.([a-z0-9_]+)$/.exec(key);
+      if (!m || NOT_ITEMS.test(m[2]!)) continue;
+      // Item-Namen haben Vorrang (z. B. bei Samen/Pflanzen)
+      if (m[1] === "item" || !byId.has(m[2]!)) byId.set(m[2]!, name);
+    }
+    this.itemList = [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, "de"));
+    return this.itemList;
+  }
 
   /** PNG für eine Item-ID oder null */
   icon(id: string): Buffer | null {

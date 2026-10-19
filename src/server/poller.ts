@@ -12,7 +12,7 @@ import { RconError, type RconClient, type RconResponse } from "./rcon/client.js"
 import type { SessionTracker } from "./sessions.js";
 
 /** Bei Änderungen am Parser erhöhen → gespeicherte Rohdaten werden neu eingelesen */
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 
 export const STORAGE_TARGET = "mcdash:tmp";
 
@@ -52,6 +52,7 @@ export class Poller extends EventEmitter {
   private inCycle = false;
   private stopped = false;
   private online = new Set<string>();
+  private onlineNames = new Map<string, string>();
   private snapshots = new Map<string, CachedSnapshot>();
   private lastUpdate: number | null = null;
   private lastError: string | null = null;
@@ -235,6 +236,7 @@ export class Poller extends EventEmitter {
       .map((p) => ({ uuid: p.uuid!, name: p.name, isBedrock: this.isBedrock(p.name, p.uuid!) }));
     this.tracker.observe(players, at);
     this.online = new Set(players.map((p) => p.uuid));
+    this.onlineNames = new Map(players.map((p) => [p.uuid, p.name]));
     this.emitPlayers();
 
     let degraded = false;
@@ -300,6 +302,11 @@ export class Poller extends EventEmitter {
     }
     const names = new Map(listed.filter((p) => p.uuid).map((p) => [p.uuid!, p.name]));
     return all.map((p) => ({ uuid: p.uuid, name: names.get(p.uuid) ?? this.repo.getPlayer(p.uuid)?.name ?? p.name }));
+  }
+
+  /** Name eines Spielers: aktuelle Online-Liste, sonst Datenbank */
+  nameOf(uuid: string): string | null {
+    return this.onlineNames.get(uuid) ?? this.repo.getPlayer(uuid)?.name ?? null;
   }
 
   /** Liest einen Spieler. Gibt false zurück, wenn nur der Rückfallweg ging. */

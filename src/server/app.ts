@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
 import Fastify, { LogController, type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import type { DiagnosticsSnapshot, LiveEvent, PlayerSessionStats } from "../shared/types.js";
+import { ActionError, type ActionService } from "./actions.js";
 import type { Assets } from "./assets.js";
 import { Auth, clearCookie, COOKIE_NAME, parseCookies, sessionCookie } from "./auth.js";
 import type { Config } from "./config.js";
@@ -19,6 +20,7 @@ export interface AppDeps {
   repo: Repo;
   poller: Poller;
   console: ConsoleService;
+  actions: ActionService;
   diag: Diagnostics;
   rcon: RconClient;
   assets: Assets;
@@ -162,6 +164,58 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return r.entry;
   });
 
+  // --- Aktionen ------------------------------------------------------------
+  const { actions } = deps;
+  /** RCON-Fehler (keine Verbindung, Zeitüberschreitung) als 503 statt 500 */
+  const rconFailure = (reply: FastifyReply, e: unknown) => {
+    if (e instanceof ActionError) return reply.code(400).send({ error: e.message });
+    return reply.code(503).send({ error: `RCON: ${(e as Error).message}` });
+  };
+
+  app.post<{ Body: { action?: unknown; confirmed?: unknown } }>("/api/action", async (req, reply) => {
+    try {
+      const r = await actions.run(req.body?.action, req.body?.confirmed === true);
+      if (r.kind === "needs_confirmation") return reply.code(409).send({ needsConfirmation: true, reason: r.reason, label: r.label });
+      return r.result;
+    } catch (e) {
+      return rconFailure(reply, e);
+    }
+  });
+
+  app.get("/api/world", async (_req, reply) => {
+    try {
+      return await actions.world();
+    } catch (e) {
+      return rconFailure(reply, e);
+    }
+  });
+
+  app.get("/api/world/spawn", async () => ({ worldSpawn: actions.worldSpawn() }));
+
+  app.post<{ Body: { spawn?: unknown } }>("/api/world/spawn", async (req, reply) => {
+    try {
+      return { worldSpawn: actions.setWorldSpawn(req.body?.spawn ?? null) };
+    } catch (e) {
+      return rconFailure(reply, e);
+    }
+  });
+
+  app.get("/api/bans", async (_req, reply) => {
+    try {
+      return await actions.bans();
+    } catch (e) {
+      return rconFailure(reply, e);
+    }
+  });
+
+  app.get("/api/items", async () => assets.items());
+
+  app.get<{ Querystring: { limit?: string; before?: string } }>("/api/audit", async (req) => {
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit ?? 200) || 200));
+    const before = Number(req.query.before) || undefined;
+    return actions.auditEntries(limit, before);
+  });
+
   // --- Diagnose ------------------------------------------------------------
   const diagSnapshot = (): DiagnosticsSnapshot => ({
     warnings: diag.getWarnings(),
@@ -206,11 +260,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     send({ type: "players", players: poller.summaries() });
     poller.on("event", send);
     deps.console.on("event", send);
+    actions.on("event", send);
     const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
     req.raw.on("close", () => {
       clearInterval(ping);
       poller.off("event", send);
       deps.console.off("event", send);
+      actions.off("event", send);
     });
   });
 

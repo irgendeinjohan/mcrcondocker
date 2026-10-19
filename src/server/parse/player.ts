@@ -1,6 +1,6 @@
 // Spieler-NBT → PlayerData. Verträgt das neue Format (equipment, ab 1.21.5)
 // und das alte (Rüstung in Inventar-Slots 100–103, Offhand -106).
-import type { ArmorSlot, Effect, GameMode, Item, PlayerData } from "../../shared/types.js";
+import type { ArmorSlot, Effect, GameMode, Item, PlayerData, Vec3 } from "../../shared/types.js";
 import { parseItem, parseItemList, translateId, type MapContext } from "./items.js";
 import { isCompound, type SnbtCompound, type SnbtValue } from "./snbt.js";
 
@@ -23,7 +23,8 @@ const KNOWN_FIELDS = new Set([
   "Passengers", "UUIDMost", "UUIDLeast", "Leashed", "LeftHanded", "PersistenceRequired", "CanPickUpLoot",
   "drop_chances", "Paper.FreezeLock", "Paper.ShouldBurnInDay", "last_death_location", "invulnerable_time",
   "entered_nether_pos", "current_explosion_impact_pos", "ignore_fall_damage_from_current_explosion",
-  "Spigot.KeepInventory", "Paper.PreviousGameMode", "previousPlayerGameType",
+  "Spigot.KeepInventory", "Paper.PreviousGameMode", "previousPlayerGameType", "last_hurt_by_player",
+  "last_hurt_by_player_memory_time",
 ]);
 
 const GAME_MODES: GameMode[] = ["survival", "creative", "adventure", "spectator"];
@@ -33,6 +34,23 @@ const OLD_OFFHAND_SLOT = -106;
 
 function num(v: SnbtValue | undefined): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+}
+
+/** {dimension:"…",pos:[I;x,y,z]} → Ort, sonst null */
+function location(v: SnbtValue | undefined): { dimension: string; pos: Vec3 } | null {
+  if (!isCompound(v) || typeof v.dimension !== "string") return null;
+  const p = v.pos;
+  if (!Array.isArray(p) || p.length < 3 || !p.every((n) => typeof n === "number")) return null;
+  return { dimension: v.dimension, pos: { x: p[0] as number, y: p[1] as number, z: p[2] as number } };
+}
+
+/** Spawnpunkt: neu "respawn:{…}" (ab 1.21.5), alt SpawnX/SpawnY/SpawnZ/SpawnDimension */
+function respawnPoint(nbt: SnbtCompound): { dimension: string; pos: Vec3 } | null {
+  const neu = location(nbt.respawn);
+  if (neu) return neu;
+  const [x, y, z] = [num(nbt.SpawnX), num(nbt.SpawnY), num(nbt.SpawnZ)];
+  if (x === undefined || y === undefined || z === undefined) return null;
+  return { dimension: typeof nbt.SpawnDimension === "string" ? nbt.SpawnDimension : "minecraft:overworld", pos: { x, y, z } };
 }
 
 export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
@@ -137,6 +155,8 @@ export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
     offhand,
     enderChest,
     effects,
+    lastDeath: location(nbt.LastDeathLocation ?? nbt.last_death_location),
+    respawn: respawnPoint(nbt),
     complete: true,
   };
 }

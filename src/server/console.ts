@@ -20,6 +20,8 @@ export class ConsoleService extends EventEmitter {
     private readonly rcon: RconClient,
     private readonly diag: Diagnostics,
     private readonly extraDangerous: string[],
+    /** schreibt jeden ausgeführten Befehl ins Aktionsprotokoll */
+    private readonly audit?: (command: string, ok: boolean, output: string) => void,
   ) {
     super();
   }
@@ -45,6 +47,7 @@ export class ConsoleService extends EventEmitter {
       this.diag.recordRaw({ at: Date.now(), kind: "console", command, body: "", fragments: 0, bytes: 0, durationMs: Date.now() - started, error: msg });
       entry = { id: this.nextId++, at: started, command, output: `Fehler: ${msg}`, ok: false, durationMs: Date.now() - started };
     }
+    this.audit?.(command, entry.ok, entry.output);
     this.history.push(entry);
     if (this.history.length > MAX_HISTORY) this.history.splice(0, this.history.length - MAX_HISTORY);
     this.emit("event", { type: "console", entry } satisfies LiveEvent);

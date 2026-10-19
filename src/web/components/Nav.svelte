@@ -6,6 +6,7 @@
   const items: { view: View; label: string; icon: string }[] = [
     { view: "players", label: "Spieler", icon: "👥" },
     { view: "map", label: "Karte", icon: "🗺️" },
+    { view: "world", label: "Welt", icon: "🌍" },
     { view: "console", label: "Konsole", icon: "⌨️" },
     { view: "sessions", label: "Zeiten", icon: "⏱️" },
     { view: "debug", label: "Debug", icon: "🛠️" },
