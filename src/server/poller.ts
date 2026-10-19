@@ -7,7 +7,7 @@ import type { Repo } from "./db/repo.js";
 import type { Diagnostics } from "./parse/diagnostics.js";
 import type { Translate } from "./parse/items.js";
 import { parsePlayer } from "./parse/player.js";
-import { parseEntityDump, parseList, parseMspt, parsePathValue, parseTps } from "./parse/responses.js";
+import { parseEntityDump, parseList, parseMspt, parsePathValue, parseTps, parseUuidQuery } from "./parse/responses.js";
 import { RconError, type RconClient, type RconResponse } from "./rcon/client.js";
 import type { SessionTracker } from "./sessions.js";
 
@@ -20,6 +20,9 @@ export const STORAGE_TARGET = "mcdash:tmp";
 export function dumpCommand(uuid: string): string {
   return `data modify storage ${STORAGE_TARGET} s set string entity ${uuid}`;
 }
+
+/** Ersatz für eine gekürzte /list-Antwort: eine Meldung pro Spieler (siehe parseUuidQuery) */
+export const UUID_QUERY_COMMAND = "execute as @a run data get entity @s UUID";
 
 const UNKNOWN_COMMAND = /^Unknown or incomplete command/i;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -213,7 +216,17 @@ export class Poller extends EventEmitter {
     this.lastError = null;
     this.onlineCount = list.online;
     this.maxPlayers = list.max;
-    const players = list.players
+    let listed = list.players;
+    if (list.truncated) {
+      try {
+        listed = await this.completeList(listed);
+      } catch (e) {
+        this.handleRconError(e);
+        return;
+      }
+      if (this.paused) return;
+    }
+    const players = listed
       .filter((p) => {
         if (p.uuid && UUID_RE.test(p.uuid)) return true;
         this.diag.warn("warn", `list-no-uuid:${p.name}`, `Spieler "${p.name}" ohne UUID in /list – wird übersprungen`);
@@ -271,6 +284,22 @@ export class Poller extends EventEmitter {
     this.lastUpdate = Date.now();
     this.emitStatus();
     this.emitPlayers();
+  }
+
+  /**
+   * Der Server kürzt "list uuids" ab etwa 6 Spielern. Die fehlenden Spieler kommen
+   * über einen zweiten Befehl, der pro Spieler eine eigene (kurze) Meldung liefert.
+   * Namen aus /list haben Vorrang, danach der gespeicherte Name, zuletzt der Anzeigename.
+   */
+  private async completeList(listed: { name: string; uuid: string | null }[]): Promise<{ name: string; uuid: string | null }[]> {
+    const r = await this.send("list", UUID_QUERY_COMMAND);
+    const all = parseUuidQuery(r.body);
+    if (!all.length) {
+      this.diag.warn("warn", "list-truncated", "/list ist gekürzt und die vollständige Spielerliste konnte nicht gelesen werden", r.body.slice(0, 200));
+      return listed;
+    }
+    const names = new Map(listed.filter((p) => p.uuid).map((p) => [p.uuid!, p.name]));
+    return all.map((p) => ({ uuid: p.uuid, name: names.get(p.uuid) ?? this.repo.getPlayer(p.uuid)?.name ?? p.name }));
   }
 
   /** Liest einen Spieler. Gibt false zurück, wenn nur der Rückfallweg ging. */

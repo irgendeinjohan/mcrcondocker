@@ -7,6 +7,8 @@ export interface ListResult {
   online: number;
   max: number;
   players: { name: string; uuid: string | null }[];
+  /** Antwort endet mit "..." – der Server hat die Liste gekürzt (siehe docs/datenformat.md) */
+  truncated: boolean;
 }
 
 const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
@@ -27,6 +29,9 @@ export function parseList(body: string, warn: Warn): ListResult | null {
   const max = Number(m[2]);
   const rest = m[3]!.trim();
   const players: ListResult["players"] = [];
+  // Über RCON bricht der Text nach 32 Textstücken mit "..." ab. Bei "list uuids"
+  // kostet jeder Spieler 5 Stücke → ab dem 6. Spieler fehlt der Rest.
+  const truncated = rest.endsWith("...");
   if (rest) {
     const re = new RegExp(`\\s*(.+?) \\((${UUID})\\)\\s*(?:,|$)`, "gs");
     let consumed = 0;
@@ -37,15 +42,37 @@ export function parseList(body: string, warn: Warn): ListResult | null {
     if (players.length === 0) {
       // ohne UUIDs (/list): Namen durch ", " getrennt
       for (const n of rest.split(", ")) if (n.trim()) players.push({ name: n.trim(), uuid: null });
-    } else if (consumed < rest.length) {
+    } else if (consumed < rest.length && !truncated) {
       warn("warn", "list-leftover", "Teil der /list-Antwort nicht zuordenbar", rest.slice(consumed, consumed + 100));
     }
   }
-  if (players.length !== online) {
+  if (players.length !== online && !truncated) {
     // Paper kann Spieler ausblenden (vanish); nur Hinweis
     warn("info", "list-count-mismatch", `/list meldet ${online} Spieler, gelesen wurden ${players.length}`);
   }
-  return { online, max, players };
+  return { online, max, players, truncated };
+}
+
+/** [I; a, b, c, d] → "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" */
+export function uuidFromInts(ints: number[]): string {
+  const hex = ints.map((n) => (n >>> 0).toString(16).padStart(8, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Antwort auf "execute as @a run data get entity @s UUID": eine Meldung pro Spieler,
+ * "Name has the following entity data: [I; a, b, c, d]". Jede Meldung wird einzeln
+ * gekürzt, deshalb kommt sie auch bei vielen Spielern vollständig an.
+ * Der Name ist der Anzeigename (ggf. mit Team-Präfix) – nur als Notlösung gedacht.
+ */
+export function parseUuidQuery(body: string): { name: string; uuid: string }[] {
+  const text = stripLegacy(body).replace(/\r/g, "");
+  const re = /\s*(.+?) has the following entity data: \[I;\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\]/gs;
+  const out: { name: string; uuid: string }[] = [];
+  for (const m of text.matchAll(re)) {
+    out.push({ name: m[1]!.trim(), uuid: uuidFromInts([m[2], m[3], m[4], m[5]].map(Number)) });
+  }
+  return out;
 }
 
 /** "§6TPS from last 1m, 5m, 15m: §a20.0§r, §a20.0§r, §a*20.0" → [20, 20, 20] */

@@ -195,3 +195,40 @@ describe("Server ohne /tps und /mspt (Vanilla/Fabric/Spigot)", () => {
     await vanilla.close();
   });
 });
+
+describe("Viele Spieler (/list wird vom Server gekürzt)", () => {
+  it("findet alle Spieler, auch nach einem Tod am Ende der Liste", async () => {
+    const world = new MockWorld();
+    const base = world.players[0]!;
+    for (let i = 0; i < 4; i++) {
+      const ints = [0x1111_0000 + i, 0x2222_0000, -0x3333_0000, 0x4444_0000 + i];
+      const hex = ints.map((n) => (n >>> 0).toString(16).padStart(8, "0")).join("");
+      world.players.push({
+        ...base,
+        schedule: undefined,
+        name: `Extra${i}`,
+        uuid: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`,
+        uuidInts: `[I;${ints.join(",")}]`,
+      });
+    }
+    // Spieler mit Online-Zeitplan entfernen, damit das Ergebnis feststeht
+    for (const x of world.players.filter((x) => x.schedule)) world.players.splice(world.players.indexOf(x), 1);
+    // gestorbener Spieler steht nach dem Respawn hinten in der Liste
+    world.players.push(world.players.shift()!);
+    const srv = await startMockRconServer({ password: "pw", handler: (c) => world.handle(c) });
+    const r = new Repo(openMemoryDb());
+    const d = new Diagnostics();
+    const client = new RconClient({ host: "127.0.0.1", port: srv.port, password: "pw" });
+    const p = new Poller(client, r, new SessionTracker(r), d, { pollIntervalMs: 60_000, perfIntervalMs: 60_000, floodgatePrefix: ".", mock: false, version: "test" });
+    client.start();
+    await client.waitForConnected();
+    await p.cycle();
+    expect(world.players.length).toBeGreaterThan(5);
+    expect(d.getRaw().list?.find((x) => x.command === "list uuids")?.body).toMatch(/\.\.\.$/);
+    expect(p.status().online).toBe(world.players.length);
+    expect(p.summaries().filter((x) => x.online).map((x) => x.name).sort()).toEqual(world.players.map((x) => x.name).sort());
+    expect(d.getWarnings().filter((w) => w.key.startsWith("list-"))).toEqual([]);
+    client.stop();
+    await srv.close();
+  });
+});
