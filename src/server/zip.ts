@@ -100,6 +100,8 @@ export class ZipReader {
     return this.entries.keys();
   }
 
+  size(name: string): number | null { return this.entries.get(name)?.size ?? null; }
+
   get(name: string): Buffer | null {
     const e = this.entries.get(name);
     if (!e) return null;

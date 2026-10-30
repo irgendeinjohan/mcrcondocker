@@ -1,3 +1,4 @@
+import { t } from "./i18n.svelte";
 // Führt Dashboard-Aktionen aus: Sicherheitsabfrage bei gefährlichen Aktionen,
 // kurze Rückmeldung (Toast) mit der Antwort des Servers.
 import type { ActionRequest, ActionResult } from "../../shared/types";
@@ -56,11 +57,11 @@ class Actions {
         if (!yes) return null;
         result = await api.action(action, true);
       }
-      if (!result.ok) this.toast(false, `Fehlgeschlagen: ${result.label}`, result.output);
+      if (!result.ok) this.toast(false, t("Fehlgeschlagen: {label}", { label: result.label }), result.output);
       else if (!opts.quiet) this.toast(true, result.label, result.output);
       return result;
     } catch (e) {
-      this.toast(false, "Aktion fehlgeschlagen", (e as Error).message);
+      this.toast(false, t("Aktion fehlgeschlagen"), (e as Error).message);
       return null;
     } finally {
       this.busy--;

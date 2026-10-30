@@ -1,6 +1,7 @@
+import { formatDiagnostic, type DiagnosticMessage } from "../../shared/diagnostic-messages.js";
 import type { DiagnosticWarning, RawResponse, WarningLevel } from "../../shared/types.js";
 
-export type Warn = (level: WarningLevel, key: string, message: string, context?: string) => void;
+export type Warn = (level: WarningLevel, key: string, message: string | DiagnosticMessage, context?: string | DiagnosticMessage) => void;
 
 /** Ringpuffer-Größe pro Befehlsart (Aktionen/Welt: mehr, damit Fehler im Export landen) */
 const RAW_PER_KIND = 5;
@@ -18,14 +19,19 @@ export class Diagnostics {
   private raw = new Map<string, RawResponse[]>();
   readonly startedAt = Date.now();
 
-  warn: Warn = (level, key, message, context) => {
+  warn: Warn = (level, key, input, contextInput) => {
+    const contextData = typeof contextInput === "object" ? contextInput : undefined;
+    const context = typeof contextInput === "object" ? formatDiagnostic("de", contextInput) : contextInput;
+    const messageData = typeof input === "string" ? undefined : input;
+    const message = typeof input === "string" ? input : formatDiagnostic("de", input);
     const now = Date.now();
     const existing = this.warnings.get(key);
     if (existing) {
       existing.count++;
       existing.lastAt = now;
       existing.message = message;
-      if (context !== undefined) existing.context = context;
+      existing.messageData = messageData;
+      if (context !== undefined) { existing.context = context; existing.contextData = contextData; }
       return;
     }
     if (this.warnings.size >= MAX_WARNINGS) {
@@ -33,7 +39,7 @@ export class Diagnostics {
       const oldest = [...this.warnings.values()].sort((a, b) => a.lastAt - b.lastAt)[0];
       if (oldest) this.warnings.delete(oldest.key);
     }
-    this.warnings.set(key, { key, level, message, context, count: 1, firstAt: now, lastAt: now });
+    this.warnings.set(key, { key, level, message, messageData, context, contextData, count: 1, firstAt: now, lastAt: now });
   };
 
   recordRaw(entry: RawResponse): void {
@@ -66,5 +72,5 @@ export class Diagnostics {
 /** Sammelt Warnungen nur lokal (z. B. für Tests). */
 export function collectingWarn(): { warn: Warn; list: { level: WarningLevel; key: string; message: string }[] } {
   const list: { level: WarningLevel; key: string; message: string }[] = [];
-  return { list, warn: (level, key, message) => void list.push({ level, key, message }) };
+  return { list, warn: (level, key, input) => void list.push({ level, key, message: typeof input === "string" ? input : formatDiagnostic("de", input) }) };
 }

@@ -1,3 +1,4 @@
+import type { RenderIndex } from "../../shared/appearance";
 // Gemeinsamer Live-Zustand, gespeist aus Server-Sent Events.
 import type { AuditEntry, ConsoleEntry, LiveEvent, PlayerSummary, ServerStatus } from "../../shared/types";
 import { api, type AssetsInfo } from "./api";
@@ -10,6 +11,8 @@ class LiveState {
   audit = $state<AuditEntry[]>([]);
   /** SSE-Verbindung zum Dashboard selbst (nicht RCON) */
   liveConnected = $state(false);
+  renderer = $state<RenderIndex | null>(null);
+  translations = $state<Record<string, string>>({});
   assets = $state<AssetsInfo | null>(null);
   /** sekündlich aktualisiert, für relative Zeitangaben */
   now = $state(Date.now());
@@ -21,6 +24,7 @@ class LiveState {
     this.stop();
     this.clock = setInterval(() => (this.now = Date.now()), 1000);
     api.consoleHistory().then((h) => (this.console = h)).catch(() => {});
+    api.renderIndex().then((index) => (this.renderer = index)).catch(() => {});
     api.assets().then((a) => (this.assets = a)).catch(() => {});
     const es = new EventSource("/api/events");
     this.es = es;

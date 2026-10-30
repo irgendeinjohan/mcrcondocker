@@ -2,18 +2,22 @@
   import type { ItemInfo } from "../../shared/types";
   import { api } from "../lib/api";
 
-  // Item-Liste nur einmal pro Seitenaufruf laden
-  let cache: Promise<ItemInfo[]> | null = null;
-  function loadItems(): Promise<ItemInfo[]> {
-    cache ??= api.items().catch(() => {
-      cache = null;
-      return [];
-    });
-    return cache;
+  // Keep one request per language and retry failed requests on the next mount.
+  const cache = new Map<string, Promise<ItemInfo[]>>();
+  function loadItems(locale: string): Promise<ItemInfo[]> {
+    let request = cache.get(locale);
+    if (!request) {
+      request = api.items(locale).catch(() => { cache.delete(locale); return []; });
+      cache.set(locale, request);
+    }
+    return request;
   }
 </script>
 
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { language } from "../lib/i18n.svelte";
+  import ItemVisual from "./ItemVisual.svelte";
   import { live } from "../lib/live.svelte";
   import { shortName } from "../lib/items";
 
@@ -25,7 +29,9 @@
   let failedIcons = $state(new Set<string>());
 
   $effect(() => {
-    void loadItems().then((l) => (items = l));
+    let current = true;
+    void loadItems(language.locale).then((list) => { if (current) items = list; });
+    return () => { current = false; };
   });
 
   const textures = $derived(!!live.assets?.textures);
@@ -55,7 +61,7 @@
 <div class="picker">
   <input
     type="search"
-    placeholder={items.length ? "Item suchen (z. B. Fackel, diamond_sword) …" : "Item-ID, z. B. minecraft:torch"}
+    placeholder={items.length ? tr("Item suchen (z. B. Fackel, diamond_sword) …") : tr("Item-ID, z. B. minecraft:torch")}
     bind:value={query}
     onfocus={() => (open = true)}
     oninput={() => (open = true)}
@@ -77,7 +83,7 @@
       {#each results as it (it.id)}
         <button type="button" class="opt" role="option" aria-selected="false" onclick={() => pick(it.id)}>
           {#if textures && !failedIcons.has(it.id)}
-            <img src={`/api/icon/${encodeURIComponent(it.id)}`} alt="" onerror={() => (failedIcons = new Set([...failedIcons, it.id]))} />
+            <span class="preview"><ItemVisual item={{ id: it.id }} onerror={() => (failedIcons = new Set([...failedIcons, it.id]))} /></span>
           {:else}
             <span class="ph"></span>
           {/if}
@@ -132,7 +138,7 @@
   .opt:focus-visible {
     background: var(--panel-2);
   }
-  img,
+  .preview,
   .ph {
     width: 24px;
     height: 24px;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../lib/i18n.svelte";
   import type { AuditEntry } from "../../../shared/types";
   import { api } from "../../lib/api";
   import { dateTime } from "../../lib/format";
@@ -36,26 +37,27 @@
 
 <section class="panel">
   <div class="head">
-    <h3>Aktionsprotokoll</h3>
+    <h3>{tr("Aktionsprotokoll")}</h3>
     <select bind:value={filter} aria-label="Filter">
-      <option value="all">Alles</option>
-      <option value="action">Nur Aktionen</option>
-      <option value="console">Nur Konsole</option>
+      <option value="all">{tr("Alles")}</option>
+      <option value="action">{tr("Nur Aktionen")}</option>
+      <option value="console">{tr("Nur Konsole")}</option>
     </select>
   </div>
-  <p class="faint small">Alles, was über das Dashboard am Server ausgeführt wurde (die letzten 5000 Einträge).</p>
+  <p class="faint small">{tr("Alles, was über das Dashboard am Server ausgeführt wurde (die letzten 5000 Einträge).")}</p>
   {#if error}
     <div class="err">{error}</div>
   {/if}
   {#if !entries.length && !error}
-    <div class="faint">Noch keine Einträge.</div>
+    <div class="faint">{tr("Noch keine Einträge.")}</div>
   {/if}
   <ul>
     {#each entries as e (e.id)}
       <li class:fail={!e.ok}>
         <button class="line" onclick={() => (openId = openId === e.id ? null : e.id)} aria-expanded={openId === e.id}>
           <span class="t faint">{dateTime(e.at)}</span>
-          <span class="badge">{e.source === "console" ? "Konsole" : "Aktion"}</span>
+          <span class="badge">{e.source === "console" ? tr("Konsole") : tr("Aktion")}</span>
+          {#if e.actor}<span class="faint">{e.actor}</span>{/if}
           <span class="lbl">{e.ok ? "" : "✕ "}{e.label}</span>
         </button>
         {#if openId === e.id}
@@ -68,7 +70,7 @@
     {/each}
   </ul>
   {#if more}
-    <button class="btn small" onclick={() => load(loaded[loaded.length - 1]?.id)}>Ältere laden</button>
+    <button class="btn small" onclick={() => load(loaded[loaded.length - 1]?.id)}>{tr("Ältere laden")}</button>
   {/if}
 </section>
 

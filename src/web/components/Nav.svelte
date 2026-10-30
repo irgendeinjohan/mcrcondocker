@@ -1,25 +1,29 @@
 <script lang="ts">
+  import { session } from "../lib/session.svelte";
+  import { t as tr } from "../lib/i18n.svelte";
+  import MinecraftIcon from "./MinecraftIcon.svelte";
   import { router, type View } from "../lib/router.svelte";
 
   let { onlogout }: { onlogout: () => void } = $props();
 
   const items: { view: View; label: string; icon: string }[] = [
-    { view: "players", label: "Spieler", icon: "👥" },
-    { view: "map", label: "Karte", icon: "🗺️" },
-    { view: "world", label: "Welt", icon: "🌍" },
-    { view: "console", label: "Konsole", icon: "⌨️" },
-    { view: "sessions", label: "Zeiten", icon: "⏱️" },
-    { view: "debug", label: "Debug", icon: "🛠️" },
+    { view: "players", label: "Spieler", icon: "minecraft:player_head" },
+    { view: "map", label: "Karte", icon: "minecraft:filled_map" },
+    { view: "world", label: "Welt", icon: "minecraft:grass_block" },
+    { view: "console", label: "Konsole", icon: "minecraft:command_block" },
+    { view: "sessions", label: "Zeiten", icon: "minecraft:clock" },
+    { view: "debug", label: "Debug", icon: "minecraft:redstone" },
+    { view: "users", label: "Benutzer", icon: "minecraft:player_head" },
   ];
 </script>
 
-<nav class="nav" aria-label="Hauptnavigation">
-  {#each items as it (it.view)}
+<nav class="nav" aria-label={tr("Hauptnavigation")}>
+  {#each items.filter((item) => session.operator || ["players", "map", "sessions"].includes(item.view)) as it (it.view)}
     <a href="#/{it.view}" class:active={router.view === it.view} aria-current={router.view === it.view ? "page" : undefined}>
-      <span class="ic" aria-hidden="true">{it.icon}</span><span class="lb">{it.label}</span>
+      <span class="ic" aria-hidden="true"><MinecraftIcon item={it.icon} /></span><span class="lb">{tr(it.label)}</span>
     </a>
   {/each}
-  <button class="logout" onclick={onlogout}><span class="ic" aria-hidden="true">🚪</span><span class="lb">Abmelden</span></button>
+  <button class="logout" onclick={onlogout}><span class="ic" aria-hidden="true"><MinecraftIcon item="minecraft:oak_door" /></span><span class="lb">{tr("Abmelden")}</span></button>
 </nav>
 
 <style>

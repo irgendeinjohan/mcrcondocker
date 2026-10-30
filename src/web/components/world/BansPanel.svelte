@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../lib/i18n.svelte";
   import type { BanLists } from "../../../shared/types";
   import { actions } from "../../lib/actions.svelte";
   import { api } from "../../lib/api";
@@ -32,29 +33,29 @@
 
 <section class="panel">
   <div class="head">
-    <h3>Gebannte Spieler</h3>
-    <button class="btn small" onclick={load} disabled={loading}>{loading ? "Lade …" : "Aktualisieren"}</button>
+    <h3>{tr("Gebannte Spieler")}</h3>
+    <button class="btn small" onclick={load} disabled={loading}>{loading ? tr("Lade …") : tr("Aktualisieren")}</button>
   </div>
   {#if error}
-    <div class="err">Bann-Liste konnte nicht gelesen werden: {error}</div>
+    <div class="err">{tr("Bann-Liste konnte nicht gelesen werden:")} {error}</div>
   {:else if !bans}
-    <div class="faint">Lade …</div>
+    <div class="faint">{tr("Lade …")}</div>
   {:else}
-    {#each [{ title: null, list: bans.players, ip: false }, { title: "Gebannte IP-Adressen", list: bans.ips, ip: true }] as part (part.ip)}
+    {#each [{ title: null, list: bans.players, ip: false }, { title: tr("Gebannte IP-Adressen"), list: bans.ips, ip: true }] as part (part.ip)}
       {#if part.title}<h3 class="sub">{part.title}</h3>{/if}
       {#if part.list.length === 0}
-        <div class="faint">Keine Einträge.</div>
+        <div class="faint">{tr("Keine Einträge.")}</div>
       {:else}
         <div class="scroll-x">
           <table>
-            <thead><tr><th>{part.ip ? "IP" : "Name"}</th><th>Gebannt von</th><th>Grund</th><th></th></tr></thead>
+            <thead><tr><th>{part.ip ? "IP" : "Name"}</th><th>{tr("Gebannt von")}</th><th>{tr("Grund")}</th><th></th></tr></thead>
             <tbody>
               {#each part.list as b (b.target)}
                 <tr>
                   <td class="mono">{b.target}</td>
                   <td>{b.source}</td>
                   <td>{b.reason}</td>
-                  <td class="act"><button class="btn small" disabled={busy} onclick={() => pardon(b.target, part.ip)}>Entbannen</button></td>
+                  <td class="act"><button class="btn small" disabled={busy} onclick={() => pardon(b.target, part.ip)}>{tr("Entbannen")}</button></td>
                 </tr>
               {/each}
             </tbody>
@@ -62,7 +63,7 @@
         </div>
       {/if}
     {/each}
-    <p class="faint small">Spieler bannen: auf der Spielerseite unter „Verwaltung“.</p>
+    <p class="faint small">{tr("Spieler bannen: auf der Spielerseite unter „Verwaltung“.")}</p>
   {/if}
 </section>
 

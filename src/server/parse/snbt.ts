@@ -1,3 +1,4 @@
+import { diagnostic, formatDiagnostic, type DiagnosticMessage } from "../../shared/diagnostic-messages.js";
 // Fehlertoleranter SNBT-Parser.
 //
 // Versteht das kompakte Format ({a:1b,b:"x"}) ebenso wie die "hübsche" Ausgabe
@@ -16,7 +17,7 @@ export interface SnbtResult {
   value: SnbtValue | undefined;
   /** Eingabe endete vorzeitig bzw. enthielt Auslassungszeichen */
   truncated: boolean;
-  error?: { pos: number; message: string };
+  error?: { pos: number; message: string; messageData?: DiagnosticMessage };
   /** Position nach dem gelesenen Wert */
   end: number;
 }
@@ -30,12 +31,13 @@ class Stop extends Error {}
 class Parser {
   pos = 0;
   truncated = false;
-  error?: { pos: number; message: string };
+  error?: { pos: number; message: string; messageData?: DiagnosticMessage };
 
   constructor(private readonly s: string) {}
 
-  fail(message: string, truncated = false): never {
-    if (!this.error) this.error = { pos: this.pos, message };
+  fail(messageData: DiagnosticMessage, truncated = false): never {
+    const message = formatDiagnostic("de", messageData);
+    if (!this.error) this.error = { pos: this.pos, message, messageData };
     if (truncated) this.truncated = true;
     throw new Stop(message);
   }
@@ -55,8 +57,8 @@ class Parser {
   /** Liest einen Wert; bei Abbruch innerhalb eines Containers wird `onPartial` mit dem Teilwert aufgerufen. */
   value(onPartial?: (v: SnbtValue) => void): SnbtValue {
     this.ws();
-    if (this.pos >= this.s.length) this.fail("Unerwartetes Ende der Eingabe", true);
-    if (this.atEllipsis()) this.fail("Ausgabe abgekürzt (...)", true);
+    if (this.pos >= this.s.length) this.fail(diagnostic("snbtEndInput"), true);
+    if (this.atEllipsis()) this.fail(diagnostic("snbtTruncated"), true);
     const c = this.peek()!;
     if (c === "{") return this.compound(onPartial);
     if (c === "[") return this.list(onPartial);
@@ -75,11 +77,11 @@ class Parser {
     }
     for (;;) {
       this.ws();
-      if (this.atEllipsis()) this.fail("Ausgabe abgekürzt (...)", true);
-      if (this.pos >= this.s.length) this.fail("Unerwartetes Ende in Compound", true);
+      if (this.atEllipsis()) this.fail(diagnostic("snbtTruncated"), true);
+      if (this.pos >= this.s.length) this.fail(diagnostic("snbtEndCompound"), true);
       const key = this.key();
       this.ws();
-      if (this.peek() !== ":") this.fail(`':' nach Schlüssel "${key}" erwartet`);
+      if (this.peek() !== ":") this.fail(diagnostic("snbtColon", { key }));
       this.pos++;
       obj[key] = undefined as never;
       try {
@@ -89,7 +91,7 @@ class Parser {
         throw e;
       }
       this.ws();
-      if (this.atEllipsis()) this.fail("Ausgabe abgekürzt (...)", true);
+      if (this.atEllipsis()) this.fail(diagnostic("snbtTruncated"), true);
       const c = this.peek();
       if (c === ",") {
         this.pos++;
@@ -99,8 +101,8 @@ class Parser {
         this.pos++;
         return obj;
       }
-      if (c === undefined) this.fail("Unerwartetes Ende in Compound", true);
-      this.fail(`',' oder '}' erwartet, gefunden '${c}'`);
+      if (c === undefined) this.fail(diagnostic("snbtEndCompound"), true);
+      this.fail(diagnostic("snbtCompoundSeparator", { character: c ?? "" }));
     }
   }
 
@@ -119,11 +121,11 @@ class Parser {
     }
     for (;;) {
       this.ws();
-      if (this.pos >= this.s.length) this.fail("Unerwartetes Ende in Liste", true);
+      if (this.pos >= this.s.length) this.fail(diagnostic("snbtEndList"), true);
       const idx = arr.length;
       arr[idx] = this.value((partial) => (arr[idx] = partial));
       this.ws();
-      if (this.atEllipsis()) this.fail("Ausgabe abgekürzt (...)", true);
+      if (this.atEllipsis()) this.fail(diagnostic("snbtTruncated"), true);
       const c = this.peek();
       if (c === ",") {
         this.pos++;
@@ -133,8 +135,8 @@ class Parser {
         this.pos++;
         return arr;
       }
-      if (c === undefined) this.fail("Unerwartetes Ende in Liste", true);
-      this.fail(`',' oder ']' erwartet, gefunden '${c}'`);
+      if (c === undefined) this.fail(diagnostic("snbtEndList"), true);
+      this.fail(diagnostic("snbtListSeparator", { character: c ?? "" }));
     }
   }
 
@@ -143,7 +145,7 @@ class Parser {
     if (c === '"' || c === "'") return this.quoted();
     const start = this.pos;
     while (this.pos < this.s.length && UNQUOTED.test(this.s[this.pos]!)) this.pos++;
-    if (this.pos === start) this.fail(`Schlüssel erwartet, gefunden '${c}'`);
+    if (this.pos === start) this.fail(diagnostic("snbtKey", { character: c ?? "" }));
     return this.s.slice(start, this.pos);
   }
 
@@ -151,7 +153,7 @@ class Parser {
     const q = this.s[this.pos++]!;
     let out = "";
     for (;;) {
-      if (this.pos >= this.s.length) this.fail("String nicht abgeschlossen", true);
+      if (this.pos >= this.s.length) this.fail(diagnostic("snbtString"), true);
       const c = this.s[this.pos++]!;
       if (c === q) return out;
       if (c !== "\\") {
@@ -161,7 +163,7 @@ class Parser {
       const e = this.s[this.pos++];
       switch (e) {
         case undefined:
-          this.fail("String nicht abgeschlossen", true);
+          this.fail(diagnostic("snbtString"), true);
         // eslint-disable-next-line no-fallthrough
         case "b": out += "\b"; break;
         case "f": out += "\f"; break;
@@ -203,7 +205,7 @@ class Parser {
       this.pos++;
     }
     const tok = this.s.slice(start, this.pos);
-    if (tok === "") this.fail(`Wert erwartet, gefunden '${this.peek()}'`);
+    if (tok === "") this.fail(diagnostic("snbtValue", { character: this.peek() ?? "" }));
     return parseLiteral(tok);
   }
 }

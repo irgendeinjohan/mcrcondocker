@@ -1,4 +1,7 @@
+import { itemAppearance } from "../../shared/appearance.js";
+import { diagnostic } from "../../shared/diagnostic-messages.js";
 // Item-NBT (neu: components, alt: tag) → einheitliches Item.
+import { translate } from "../../shared/translations.js";
 import { componentToSegments, prettifyId, type TextSegment } from "../../shared/mctext.js";
 import type { Enchantment, Item } from "../../shared/types.js";
 import { defaultMaxDamage } from "./durability.js";
@@ -122,7 +125,7 @@ function colorHex(n: number): string {
 /** Liest ein Item. Gibt null zurück für leere Slots / Luft. */
 export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "item", depth = 0): Item | null {
   if (!isCompound(raw)) {
-    if (raw !== undefined) ctx.warn("warn", `item-not-compound:${path}`, `Item an ${path} hat ein unerwartetes Format`);
+    if (raw !== undefined) ctx.warn("warn", `item-not-compound:${path}`, diagnostic("itemNotCompound", { path }));
     return null;
   }
   // Container-Einträge {slot, item:{…}} entpacken
@@ -133,7 +136,7 @@ export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "i
   }
   const idRaw = str(raw.id) ?? (typeof raw.id === "number" ? String(raw.id) : undefined);
   if (!idRaw) {
-    ctx.warn("warn", `item-no-id:${path}`, `Item ohne "id" an ${path} wird übersprungen`);
+    ctx.warn("warn", `item-no-id:${path}`, diagnostic("itemNoId", { path }));
     return null;
   }
   const id = idRaw.includes(":") ? idRaw : `minecraft:${idRaw}`;
@@ -153,6 +156,12 @@ export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "i
     details: [],
   };
 
+  const detail = (key: string, params: Record<string, string | number> = {}, gameKeys?: Record<string, string>) => {
+    item.details.push(translate("de", key, params));
+    (item.detailMessages ??= []).push({ key, params, ...(gameKeys ? { gameKeys } : {}) });
+  };
+  const gameKey = (kind: string, id: string) => `${kind}.${(id.includes(":") ? id : `minecraft:${id}`).replace(":", ".")}`;
+
   // Komponenten normalisieren (Namespace weg, entfernte "!x" ignorieren)
   const comps: Record<string, SnbtValue> = Object.create(null);
   if (isCompound(raw.components)) {
@@ -161,7 +170,7 @@ export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "i
       const key = stripNs(k);
       comps[key] = v;
       if (!HANDLED.has(key) && !IGNORED.has(key)) {
-        ctx.warn("info", `unknown-component:${key}`, `Unbekannte Item-Komponente "${k}" wird ignoriert`, `z. B. an ${id}`);
+        ctx.warn("info", `unknown-component:${key}`, diagnostic("unknownComponent", { component: k }), id);
       }
     }
   }
@@ -183,7 +192,10 @@ export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "i
     if (itemName) item.name = itemName;
     else if (bookTitle) item.name = [{ text: bookTitle }];
     else if ((profileName || skullOwner) && id === "minecraft:player_head") item.name = [{ text: `${profileName ?? skullOwner}'s Head` }];
-    else item.name = [{ text: translateId(id, "item", ctx.translate) }];
+    else {
+      item.name = [{ text: translateId(id, "item", ctx.translate) }];
+      item.nameIsDefault = true;
+    }
   }
 
   // Lore
@@ -239,46 +251,49 @@ export function parseItem(raw: SnbtValue | undefined, ctx: MapContext, path = "i
     const projectiles = comps.charged_projectiles;
     if (Array.isArray(projectiles) && projectiles.length) {
       const names = projectiles.map((p) => parseItem(p, ctx, `${path}.projectile`, depth + 1)).filter(Boolean).map((p) => p!.name.map((s) => s.text).join(""));
-      item.details.push(`Geladen: ${names.join(", ")}`);
+      detail("Geladen: {items}", { items: names.join(", ") });
     }
   }
 
   // Zusätzliche Details
   const potion = isCompound(comps.potion_contents) ? comps.potion_contents : undefined;
   const potionId = potion ? str(potion.potion) : typeof comps.potion_contents === "string" ? comps.potion_contents : str(tag?.Potion);
-  if (potionId) item.details.push(`Trank: ${translateId(potionId, "effect", undefined)}`);
+  if (potionId) detail("Trank: {potion}", { potion: translateId(potionId, "effect", undefined) }, {
+    potion: `item.minecraft.${id.replace("minecraft:", "")}.effect.${potionId.replace("minecraft:", "").replace(/^(?:strong|long)_/, "")}`,
+  });
   if (potion && Array.isArray(potion.custom_effects)) {
     for (const e of potion.custom_effects) {
       if (!isCompound(e) || typeof e.id !== "string") continue;
       const amp = num(e.amplifier) ?? 0;
       const dur = num(e.duration);
-      item.details.push(`${translateId(e.id, "effect", ctx.translate)} ${roman(amp + 1)}${dur !== undefined ? ` (${formatTicks(dur)})` : ""}`);
+      detail("{effect} {level}{duration}", { effect: translateId(e.id, "effect", ctx.translate), level: roman(amp + 1), duration: dur !== undefined ? ` (${formatTicks(dur)})` : "" }, { effect: gameKey("effect", e.id) });
     }
   }
   const book = isCompound(comps.written_book_content) ? comps.written_book_content : undefined;
   const author = str(book?.author) ?? str(tag?.author);
-  if (author) item.details.push(`von ${author}`);
+  if (author) detail("von {author}", { author });
   const pages = Array.isArray(book?.pages) ? book.pages.length : Array.isArray(tag?.pages) ? tag.pages.length : undefined;
-  if (pages !== undefined) item.details.push(`${pages} Seite${pages === 1 ? "" : "n"}`);
+  if (pages !== undefined) detail(pages === 1 ? "{count} Seite" : "{count} Seiten", { count: pages });
   const dyed = comps.dyed_color ?? display?.color;
   const dyedNum = num(dyed) ?? (isCompound(dyed) ? num(dyed.rgb) : undefined);
-  if (dyedNum !== undefined) item.details.push(`Gefärbt: ${colorHex(dyedNum)}`);
+  if (dyedNum !== undefined) detail("Gefärbt: {color}", { color: colorHex(dyedNum) });
   const trim = isCompound(comps.trim) ? comps.trim : tag && isCompound(tag.Trim) ? tag.Trim : undefined;
   if (trim) {
     const pattern = str(trim.pattern);
     const material = str(trim.material);
-    if (pattern) item.details.push(`Rüstungsbesatz: ${prettifyId(pattern)}${material ? ` (${prettifyId(material)})` : ""}`);
+    if (pattern) detail("Rüstungsbesatz: {pattern}{material}", { pattern: prettifyId(pattern), material: material ? ` (${prettifyId(material)})` : "" }, { pattern: gameKey("trim_pattern", pattern) });
   }
   const fireworks = isCompound(comps.fireworks) ? comps.fireworks : tag && isCompound(tag.Fireworks) ? tag.Fireworks : undefined;
   const flight = fireworks ? num(fireworks.flight_duration) ?? num(fireworks.Flight) : undefined;
-  if (flight !== undefined) item.details.push(`Flugdauer: ${flight}`);
+  if (flight !== undefined) detail("Flugdauer: {duration}", { duration: flight });
   const mapId = num(comps.map_id) ?? num(tag?.map);
-  if (mapId !== undefined) item.details.push(`Karte #${mapId}`);
+  if (mapId !== undefined) detail("Karte #{id}", { id: mapId });
   const instrument = str(comps.instrument);
-  if (instrument) item.details.push(prettifyId(instrument));
+  if (instrument) detail("{instrument}", { instrument: prettifyId(instrument) }, { instrument: gameKey("instrument", instrument) });
   const ominous = num(comps.ominous_bottle_amplifier);
-  if (ominous !== undefined) item.details.push(`Stufe ${roman(ominous + 1)}`);
+  if (ominous !== undefined) detail("Stufe {level}", { level: roman(ominous + 1) });
 
+  item.appearance = itemAppearance(comps, tag);
   return item;
 }
 
@@ -291,7 +306,7 @@ export function formatTicks(ticks: number): string {
 export function parseItemList(list: SnbtValue | undefined, ctx: MapContext, path: string, depth = 0): Item[] {
   if (list === undefined) return [];
   if (!Array.isArray(list)) {
-    ctx.warn("warn", `itemlist-not-list:${path}`, `${path} ist keine Liste`);
+    ctx.warn("warn", `itemlist-not-list:${path}`, diagnostic("itemListNotList", { path }));
     return [];
   }
   const out: Item[] = [];

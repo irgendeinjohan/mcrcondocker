@@ -1,7 +1,11 @@
 <script lang="ts">
+  import type { DashboardUser } from "../../shared/users";
+  import LanguagePicker from "./LanguagePicker.svelte";
+  import { t as tr } from "../lib/i18n.svelte";
   import { api } from "../lib/api";
 
-  let { onlogin, mock = false }: { onlogin: () => void; mock?: boolean } = $props();
+  let { onlogin, mock = false }: { onlogin: (user: DashboardUser) => void; mock?: boolean } = $props();
+  let username = $state("admin");
   let password = $state("");
   let error = $state<string | null>(null);
   let busy = $state(false);
@@ -12,9 +16,9 @@
     busy = true;
     error = null;
     try {
-      await api.login(password);
+      const result = await api.login(password, username);
       password = "";
-      onlogin();
+      onlogin(result.user);
     } catch (err) {
       error = (err as Error).message;
     } finally {
@@ -27,12 +31,15 @@
   <form class="panel" onsubmit={submit}>
     <img src="/icons/icon.svg" alt="" width="56" height="56" />
     <h1>MC-Dashboard</h1>
-    <label for="pw" class="muted">Passwort</label>
+    <LanguagePicker />
+    <label for="username" class="muted">{tr("Benutzername")}</label>
+    <input id="username" bind:value={username} autocomplete="username" required maxlength="40" />
+    <label for="pw" class="muted">{tr("Passwort")}</label>
     <!-- svelte-ignore a11y_autofocus -->
     <input id="pw" type="password" bind:value={password} autocomplete="current-password" autofocus required />
     {#if error}<div class="err" role="alert">{error}</div>{/if}
-    <button class="btn primary" type="submit" disabled={busy || !password}>{busy ? "Prüfe …" : "Anmelden"}</button>
-    {#if mock}<div class="faint hint">Mock-Modus: Passwort „mock“ (falls nicht anders gesetzt)</div>{/if}
+    <button class="btn primary" type="submit" disabled={busy || !password}>{busy ? tr("Prüfe …") : tr("Anmelden")}</button>
+    {#if mock}<div class="faint hint">{tr("Mock-Modus: Passwort „mock“ (falls nicht anders gesetzt)")}</div>{/if}
   </form>
 </div>
 

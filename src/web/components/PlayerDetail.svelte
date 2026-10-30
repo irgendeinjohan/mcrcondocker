@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { session } from "../lib/session.svelte";
+  import { gameName } from "../lib/game-text.svelte";
   import type { PlayerDetail } from "../../shared/types";
   import { api } from "../lib/api";
   import { ago, coord, dateTime, dimColor, dimLabel, duration, GAME_MODES, roman } from "../lib/format";
@@ -46,7 +49,7 @@
 
 <div class="detail">
   {#if onback}
-    <button class="btn small back" onclick={onback}>← Spieler</button>
+    <button class="btn small back" onclick={onback}>{tr("← Spieler")}</button>
   {/if}
   {#if error}
     <div class="panel err">{error}</div>
@@ -59,19 +62,19 @@
     </div>
     <div class="stand" class:old={!detail.online}>
       {#if detail.snapshotAt}
-        Stand: {dateTime(detail.snapshotAt)} ({ago(detail.snapshotAt, live.now)})
+        {tr("Stand:")} {dateTime(detail.snapshotAt)} ({ago(detail.snapshotAt, live.now)})
       {:else}
-        Noch keine Daten gespeichert.
+        {tr("Noch keine Daten gespeichert.")}
       {/if}
-      {#if !detail.online && detail.lastSeen}· zuletzt gesehen {dateTime(detail.lastSeen)}{/if}
+      {#if !detail.online && detail.lastSeen}{tr("· zuletzt gesehen")} {dateTime(detail.lastSeen)}{/if}
     </div>
     <div class="faint uuid mono">{detail.uuid}</div>
 
     {#if d}
       {#if !d.complete}
         <div class="panel warn">
-          Die Spielerdaten konnten nicht vollständig gelesen werden. Inventare fehlen eventuell.
-          <a href="#/debug">Debug-Seite</a> zeigt Details.
+          {tr("Die Spielerdaten konnten nicht vollständig gelesen werden. Inventare fehlen eventuell.")}
+          <a href="#/debug">{tr("Debug-Seite")}</a> {tr("zeigt Details.")}
         </div>
       {/if}
       <div class="stats panel">
@@ -82,37 +85,37 @@
           </div>
           <div class="sub">
             <span class="badge" style:color={dimColor(d.dimension)} style:border-color={dimColor(d.dimension)}>{dimLabel(d.dimension)}</span>
-            <button class="btn small" onclick={() => router.go("map", d.dimension)}>auf Karte</button>
+            <button class="btn small" onclick={() => router.go("map", d.dimension)}>{tr("auf Karte")}</button>
           </div>
           {#if d.dimension === "minecraft:the_nether"}
-            <div class="sub faint">entspricht Oberwelt {coord(d.pos.x * 8)} / {coord(d.pos.z * 8)}</div>
+            <div class="sub faint">{tr("entspricht Oberwelt")} {coord(d.pos.x * 8)} / {coord(d.pos.z * 8)}</div>
           {:else if d.dimension === "minecraft:overworld"}
-            <div class="sub faint">entspricht Nether {coord(d.pos.x / 8)} / {coord(d.pos.z / 8)}</div>
+            <div class="sub faint">{tr("entspricht Nether")} {coord(d.pos.x / 8)} / {coord(d.pos.z / 8)}</div>
           {/if}
         </div>
         <div class="stat">
-          <div class="k">Leben</div>
+          <div class="k">{tr("Leben")}</div>
           <StatBar kind="health" value={d.health} max={d.maxHealth} />
         </div>
         <div class="stat">
-          <div class="k">Hunger</div>
+          <div class="k">{tr("Hunger")}</div>
           <StatBar kind="food" value={d.food} />
-          <div class="sub faint">Sättigung {Math.round(d.saturation * 10) / 10}</div>
+          <div class="sub faint">{tr("Sättigung")} {Math.round(d.saturation * 10) / 10}</div>
         </div>
         <div class="stat">
-          <div class="k">Erfahrung</div>
+          <div class="k">{tr("Erfahrung")}</div>
           <div class="v">Level {d.xpLevel}</div>
           <div class="xp"><span style:width={`${Math.round(d.xpProgress * 100)}%`}></span></div>
         </div>
         <div class="stat">
-          <div class="k">Spielmodus</div>
-          <div class="v">{GAME_MODES[d.gameMode] ?? d.gameMode}</div>
+          <div class="k">{tr("Spielmodus")}</div>
+          <div class="v">{tr(GAME_MODES[d.gameMode] ?? d.gameMode)}</div>
         </div>
         {#if sessionTotal !== null}
           <div class="stat">
-            <div class="k">Online-Zeit gesamt</div>
+            <div class="k">{tr("Online-Zeit gesamt")}</div>
             <div class="v">{duration(sessionTotal)}</div>
-            <div class="sub"><a href="#/sessions/{detail.uuid}">Sessions ansehen</a></div>
+            <div class="sub"><a href="#/sessions/{detail.uuid}">{tr("Sessions ansehen")}</a></div>
           </div>
         {/if}
       </div>
@@ -120,19 +123,19 @@
       {#if d.effects.length}
         <div class="effects">
           {#each d.effects as e (e.id)}
-            <span class="badge">{e.name} {roman(e.amplifier + 1)} · {e.duration < 0 ? "∞" : duration((e.duration / 20) * 1000)}</span>
+            <span class="badge">{gameName(e.id, "effect", e.name)} {roman(e.amplifier + 1)} · {e.duration < 0 ? "∞" : duration((e.duration / 20) * 1000)}</span>
           {/each}
         </div>
       {/if}
 
-      <PlayerActions {detail} data={d} />
+      {#if session.operator}<PlayerActions {detail} data={d} />{/if}
       <Inventory data={d} />
     {:else}
-      <div class="panel muted">Für diesen Spieler liegen noch keine Inventardaten vor.</div>
-      <PlayerActions {detail} data={null} />
+      <div class="panel muted">{tr("Für diesen Spieler liegen noch keine Inventardaten vor.")}</div>
+      {#if session.operator}<PlayerActions {detail} data={null} />{/if}
     {/if}
   {:else}
-    <div class="muted">Lade …</div>
+    <div class="muted">{tr("Lade …")}</div>
   {/if}
 </div>
 

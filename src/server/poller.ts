@@ -1,3 +1,4 @@
+import { diagnostic } from "../shared/diagnostic-messages.js";
 // Regelmäßige RCON-Abfragen: Online-Liste, Spielerdaten, TPS/MSPT.
 import { EventEmitter } from "node:events";
 import type {
@@ -12,7 +13,7 @@ import { RconError, type RconClient, type RconResponse } from "./rcon/client.js"
 import type { SessionTracker } from "./sessions.js";
 
 /** Bei Änderungen am Parser erhöhen → gespeicherte Rohdaten werden neu eingelesen */
-export const PARSER_VERSION = 2;
+export const PARSER_VERSION = 4;
 
 export const STORAGE_TARGET = "mcdash:tmp";
 
@@ -101,7 +102,7 @@ export class Poller extends EventEmitter {
         const data = JSON.parse(row.parsed_json) as PlayerData;
         this.snapshots.set(row.uuid, { takenAt: row.taken_at, data, json: row.parsed_json, savedAt: row.taken_at });
       } catch {
-        this.diag.warn("warn", `snapshot-corrupt:${row.uuid}`, "Gespeicherter Datenstand ist beschädigt");
+        this.diag.warn("warn", `snapshot-corrupt:${row.uuid}`, diagnostic("snapshotCorrupt"));
       }
     }
   }
@@ -160,7 +161,7 @@ export class Poller extends EventEmitter {
     try {
       await this.cycle();
     } catch (e) {
-      this.diag.warn("error", "poll-crash", `Fehler im Abfragezyklus: ${(e as Error).message}`, (e as Error).stack);
+      this.diag.warn("error", "poll-crash", diagnostic("pollCrash", { error: (e as Error).message }), (e as Error).stack);
     } finally {
       this.inCycle = false;
     }
@@ -230,7 +231,7 @@ export class Poller extends EventEmitter {
     const players = listed
       .filter((p) => {
         if (p.uuid && UUID_RE.test(p.uuid)) return true;
-        this.diag.warn("warn", `list-no-uuid:${p.name}`, `Spieler "${p.name}" ohne UUID in /list – wird übersprungen`);
+        this.diag.warn("warn", `list-no-uuid:${p.name}`, diagnostic("listNoUuid", { name: p.name }));
         return false;
       })
       .map((p) => ({ uuid: p.uuid!, name: p.name, isBedrock: this.isBedrock(p.name, p.uuid!) }));
@@ -264,14 +265,14 @@ export class Poller extends EventEmitter {
           const body = (await this.send("tps", "tps")).body;
           if (UNKNOWN_COMMAND.test(body)) {
             this.noTps = true;
-            this.diag.warn("info", "no-tps", "Der Server kennt /tps nicht (kein Paper?) – TPS wird nicht angezeigt");
+            this.diag.warn("info", "no-tps", diagnostic("noTps"));
           } else tps = parseTps(body, this.diag.warn);
         }
         if (!this.noMspt) {
           const body = (await this.send("mspt", "mspt")).body;
           if (UNKNOWN_COMMAND.test(body)) {
             this.noMspt = true;
-            this.diag.warn("info", "no-mspt", "Der Server kennt /mspt nicht (kein Paper?) – MSPT wird nicht angezeigt");
+            this.diag.warn("info", "no-mspt", diagnostic("noMspt"));
           } else mspt = parseMspt(body, this.diag.warn);
         }
         this.perf = tps || mspt ? { tps, mspt, at: Date.now() } : null;
@@ -297,7 +298,7 @@ export class Poller extends EventEmitter {
     const r = await this.send("list", UUID_QUERY_COMMAND);
     const all = parseUuidQuery(r.body);
     if (!all.length) {
-      this.diag.warn("warn", "list-truncated", "/list ist gekürzt und die vollständige Spielerliste konnte nicht gelesen werden", r.body.slice(0, 200));
+      this.diag.warn("warn", "list-truncated", diagnostic("listTruncated"), r.body.slice(0, 200));
       return listed;
     }
     const names = new Map(listed.filter((p) => p.uuid).map((p) => [p.uuid!, p.name]));
@@ -325,7 +326,7 @@ export class Poller extends EventEmitter {
       }
     } else {
       // Rückfallweg: Einzelwerte
-      this.diag.warn("error", "dump-failed", "Spielerdaten konnten nicht vollständig gelesen werden – nur Basiswerte (Rückfallweg)", r.body.slice(0, 200));
+      this.diag.warn("error", "dump-failed", diagnostic("dumpFailed"), r.body.slice(0, 200));
       data = await this.pollPlayerBasic(uuid);
       raw = null;
       complete = false;

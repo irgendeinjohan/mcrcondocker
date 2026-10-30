@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../lib/i18n.svelte";
   import { GAMERULES } from "../../../shared/gamerules";
   import type { Difficulty, GameruleState, TimePreset, WeatherKind, WorldState } from "../../../shared/types";
   import { actions } from "../../lib/actions.svelte";
@@ -79,17 +80,17 @@
     try {
       const r = await api.setWorldSpawn(clear ? null : { x: num(spawn.x), y: num(spawn.y), z: num(spawn.z) });
       if (world) world.worldSpawn = r.worldSpawn;
-      actions.toast(true, clear ? "Weltspawn entfernt" : "Weltspawn gespeichert");
+      actions.toast(true, clear ? tr("Weltspawn entfernt") : tr("Weltspawn gespeichert"));
     } catch (e) {
-      actions.toast(false, "Speichern fehlgeschlagen", (e as Error).message);
+      actions.toast(false, tr("Speichern fehlgeschlagen"), (e as Error).message);
     }
   }
 </script>
 
 {#if error}
   <div class="panel err">
-    Weltdaten konnten nicht gelesen werden: {error}
-    <button class="btn small" onclick={load}>Erneut versuchen</button>
+    {tr("Weltdaten konnten nicht gelesen werden:")} {error}
+    <button class="btn small" onclick={load}>{tr("Erneut versuchen")}</button>
   </div>
 {/if}
 
@@ -102,7 +103,7 @@
         (e.currentTarget as HTMLInputElement).checked = g.value as boolean;
         void run({ type: "gamerule", rule: g.name, value: v });
       }} />
-      <span>{GAMERULES.find((d) => d.key === key)?.label}</span>
+      <span>{tr(GAMERULES.find((d) => d.key === key)?.label)}</span>
     </label>
   {/if}
 {/snippet}
@@ -110,40 +111,40 @@
 <div class="grid">
   <section class="panel">
     <div class="head">
-      <h3>Uhrzeit</h3>
-      <button class="btn small" onclick={load} disabled={loading}>{loading ? "Lade …" : "Aktualisieren"}</button>
+      <h3>{tr("Uhrzeit")}</h3>
+      <button class="btn small" onclick={load} disabled={loading}>{loading ? tr("Lade …") : tr("Aktualisieren")}</button>
     </div>
     <div class="big">
       {#if world?.daytime != null}
-        {clock(world.daytime)} Uhr
-        {#if world.day != null}<span class="faint">· Tag {world.day + 1}</span>{/if}
+        {clock(world.daytime)} {tr("Uhr")}
+        {#if world.day != null}<span class="faint">{tr("· Tag")} {world.day + 1}</span>{/if}
       {:else}
         <span class="faint">–</span>
       {/if}
     </div>
     <div class="row">
       {#each times as t (t.id)}
-        <button class="btn small" disabled={busy} onclick={() => run({ type: "time", preset: t.id })}>{t.icon} {t.label}</button>
+        <button class="btn small" disabled={busy} onclick={() => run({ type: "time", preset: t.id })}>{t.icon} {tr(t.label)}</button>
       {/each}
     </div>
     <div class="row">{@render toggle("doDaylightCycle")}</div>
   </section>
 
   <section class="panel">
-    <h3>Wetter</h3>
+    <h3>{tr("Wetter")}</h3>
     <div class="row">
       {#each weathers as w (w.id)}
         <button class="btn small" class:primary={world?.weather === w.id} disabled={busy} onclick={() => run({ type: "weather", weather: w.id })}>
-          {w.icon} {w.label}
+          {w.icon} {tr(w.label)}
         </button>
       {/each}
     </div>
-    {#if world && world.weather === null}<div class="faint small">Aktuelles Wetter konnte nicht gelesen werden.</div>{/if}
+    {#if world && world.weather === null}<div class="faint small">{tr("Aktuelles Wetter konnte nicht gelesen werden.")}</div>{/if}
     <div class="row">{@render toggle("doWeatherCycle")}</div>
   </section>
 
   <section class="panel">
-    <h3>Schwierigkeit</h3>
+    <h3>{tr("Schwierigkeit")}</h3>
     <div class="row">
       {#each difficulties as d (d.id)}
         <button
@@ -152,23 +153,23 @@
           disabled={busy || world?.difficulty === d.id}
           onclick={() => run({ type: "difficulty", difficulty: d.id })}
         >
-          {d.label}
+          {tr(d.label)}
         </button>
       {/each}
     </div>
   </section>
 
   <section class="panel">
-    <h3>Weltspawn</h3>
+    <h3>{tr("Weltspawn")}</h3>
     <p class="faint small">
-      Lässt sich über RCON nicht auslesen. Hier hinterlegt, erscheint auf jeder Spielerseite „Zum Weltspawn“.
+      {tr("Lässt sich über RCON nicht auslesen. Hier hinterlegt, erscheint auf jeder Spielerseite „Zum Weltspawn“.")}
     </p>
     <form class="row" onsubmit={(e) => { e.preventDefault(); if (spawnValid) void saveSpawn(); }}>
       <input class="c" inputmode="decimal" placeholder="X" aria-label="X" bind:value={spawn.x} />
       <input class="c" inputmode="decimal" placeholder="Y" aria-label="Y" bind:value={spawn.y} />
       <input class="c" inputmode="decimal" placeholder="Z" aria-label="Z" bind:value={spawn.z} />
-      <button class="btn small" type="submit" disabled={!spawnValid}>Speichern</button>
-      {#if world?.worldSpawn}<button class="btn small" type="button" onclick={() => saveSpawn(true)}>Entfernen</button>{/if}
+      <button class="btn small" type="submit" disabled={!spawnValid}>{tr("Speichern")}</button>
+      {#if world?.worldSpawn}<button class="btn small" type="button" onclick={() => saveSpawn(true)}>{tr("Entfernen")}</button>{/if}
     </form>
   </section>
 </div>
@@ -176,14 +177,14 @@
 <section class="panel">
   <h3>Gamerules</h3>
   {#if !world && !error}
-    <div class="faint">Lade …</div>
+    <div class="faint">{tr("Lade …")}</div>
   {/if}
   <div class="rules">
     {#each listed as { def, state } (def.key)}
       <div class="rule">
         <div class="lbl">
-          <div>{def.label}</div>
-          <div class="faint small">{def.hint ?? ""} <span class="mono">{state.name}</span></div>
+          <div>{tr(def.label)}</div>
+          <div class="faint small">{tr(def.hint)} <span class="mono">{state.name}</span></div>
         </div>
         {#if typeof state.value === "boolean"}
           <label class="sw">
@@ -192,7 +193,7 @@
               (e.currentTarget as HTMLInputElement).checked = state.value as boolean;
               void run({ type: "gamerule", rule: state.name, value: v });
             }} />
-            <span>{state.value ? "an" : "aus"}</span>
+            <span>{state.value ? tr("an") : tr("aus")}</span>
           </label>
         {:else}
           <form class="row" onsubmit={(e) => {
@@ -200,15 +201,15 @@
             const v = Number(numbers[def.key]);
             if (Number.isInteger(v)) void run({ type: "gamerule", rule: state.name, value: v });
           }}>
-            <input class="c" type="number" bind:value={numbers[def.key]} aria-label={def.label} />
-            <button class="btn small" type="submit" disabled={busy || Number(numbers[def.key]) === state.value}>Setzen</button>
+            <input class="c" type="number" bind:value={numbers[def.key]} aria-label={tr(def.label)} />
+            <button class="btn small" type="submit" disabled={busy || Number(numbers[def.key]) === state.value}>{tr("Setzen")}</button>
           </form>
         {/if}
       </div>
     {/each}
   </div>
   {#if missing.length}
-    <div class="faint small">Vom Server nicht unterstützt: {missing.join(", ")}</div>
+    <div class="faint small">{tr("Vom Server nicht unterstützt:")} {missing.map((label) => tr(label)).join(", ")}</div>
   {/if}
 </section>
 

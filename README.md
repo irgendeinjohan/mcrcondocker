@@ -17,6 +17,40 @@ Spieler, Inventare, Karte, Konsole und Online-Zeiten auf einen Blick – im Brow
 
 </div>
 
+## English / Deutsch, BlueMap, and inventory icons
+
+[Accounts, automatic backups, restore drills, readiness, resource packs, and CI](docs/operations.md) are documented in the operations runbook. Sign in as **admin** with your existing dashboard password; create viewer/operator accounts under **Users**.
+
+Choose **English** or **Deutsch** on the login page or in the top bar. The first visit follows the browser language (English fallback); the choice is saved on that browser. Dates, coordinates, game item names, item search, enchantments, effects, and action confirmations follow the selected language. Custom names, book titles, player names, commands, raw game responses, historical audit entries, and raw diagnostic context keep their original content. Parser warnings switch language through stable message IDs.
+
+On **Map → Configure BlueMap**, enter your own complete map URL, such as `https://map.example.com/` or `http://192.168.1.50:8100/`. The dashboard saves it in SQLite, so it survives restarts and is available to other dashboard sessions. Each browser can switch between **BlueMap** and the existing **Coordinate map**. You can edit or remove the URL from the same settings panel.
+
+BlueMap is a separately installed Minecraft plugin/mod and web application; this dashboard embeds it. Its URL must be reachable from the browser. When the dashboard uses HTTPS, BlueMap must also use HTTPS. Configure BlueMap's web server or reverse proxy to permit framing by your dashboard origin; if it refuses, use **Open BlueMap** to open it in a new tab. The dashboard keeps its own frame policy restricted and never fetches user-provided map URLs on the backend. See the [BlueMap installation guide](https://bluemap.bluecolored.de/wiki/getting-started/Installation.html).
+
+**Correct vanilla inventory icons are included in newly built Docker images.** For development or a source installation, download the pinned pack once:
+
+```sh
+npm ci
+npm run assets:download
+npm run assets:models
+npm run build
+npm run mock
+```
+
+The pack contains **1,658 Minecraft Java 26.3 inventory renders**, including 3D blocks, chests, beds, shields, banners, and heads, plus actual health/hunger and empty equipment-slot sprites. Files are served locally; the browser does not contact an icon CDN. Game names are included in English and German. The setup download steps need network access; the running dashboard does not. `npm run build` alone does not download assets. Rebuild the Docker image from this checkout to use these changes; previously published images are unchanged.
+
+Icons are pinned to [Owen1212055/mc-assets, Minecraft 26.3](https://github.com/Owen1212055/mc-assets/tree/bc96011714c0eb3770bd641a3b86459ad5f860c7); HUD sprites and language files come from the [26.3 asset mirror](https://github.com/InventivetalentDev/minecraft-assets/tree/6c088630459d8ca369ef0d6c07636d7d63a3b0f1). The downloader verifies the inventory archive's SHA-256 and writes source attribution to `game-assets/sources.json`. Minecraft game assets belong to Mojang Studios / Microsoft.
+
+To override an icon or support another namespace, put a rendered PNG in `data/assets/icons/<namespace>/<item>.png`, e.g. `data/assets/icons/minecraft/chest.png` or `data/assets/icons/mymod/example.png`, then restart the dashboard. User icons take precedence over the bundled pack. The original client-JAR/raw-texture fallback is still supported. `BUNDLED_ASSETS_DIR` can point to another local pack; the default is `./game-assets`. Component-aware rendering now adds dyes/trims, potion colors, patterns, custom models, and locally installed profile skins using versioned models and user resource packs. See the [rendering setup](docs/operations.md#component-aware-item-icons-and-resource-packs) and [implemented project review](docs/review.md).
+
+For a repeatable browser smoke check after building and downloading assets:
+
+```sh
+CHROMIUM_PATH=/usr/bin/google-chrome npm run test:smoke
+```
+
+The smoke check starts its own temporary mock server and database. It does not connect to a live Minecraft server.
+
 ---
 
 > [!NOTE]
@@ -248,7 +282,7 @@ Die Sprachdateien liegen im Asset-Speicher des Launchers, nicht in der `.jar`:
 
 </details>
 
-Blöcke werden als flache Textur einer Seite gezeigt. Einige Items haben im Spiel gar kein flaches Bild (Truhen, Betten, Schilde, Köpfe, Banner) und behalten deshalb die Kachel.
+Mit dem neuen Icon-Paket werden Blöcke und besondere Items als gerenderte Inventarsymbole gezeigt. Nur beim alten Textur-/JAR-Rückfallweg bleiben Blockseiten flach; fehlende Bilder behalten eine Ersatzkachel.
 
 ## Konfiguration
 
@@ -279,7 +313,7 @@ Die RCON-Zugangsdaten werden nie an den Browser geschickt und nie protokolliert.
 ## Sicherheit
 
 - Gedacht für das **Heimnetz**. Gib das Dashboard **nicht** per Portweiterleitung ins Internet frei. Wenn du von unterwegs zugreifen willst, nutze ein VPN (z. B. WireGuard oder Tailscale).
-- Die Anmeldung erfolgt mit einem Passwort. Die Sitzung liegt in einem HttpOnly-Cookie (`SameSite=Strict`). Nach 5 Fehlversuchen in 15 Minuten wird die IP gesperrt.
+- Die Anmeldung erfolgt mit Benutzername und Passwort (Administratorkonto: `admin`). Betrachter haben nur Lesezugriff; Operatoren verwalten den Server. Die Sitzung liegt in einem HttpOnly-Cookie (`SameSite=Strict`). Nach 5 Fehlversuchen in 15 Minuten wird die IP gesperrt.
 - Der Container läuft als unprivilegierter Benutzer und übernimmt beim Start den Datenordner. Klappt das nicht, setze `PUID`/`PGID` auf deine Benutzer-ID (`id` im Terminal).
 - **HTTPS:** einen Reverse-Proxy davorsetzen (Synology „Anmeldeportal → Reverse Proxy“, Nginx Proxy Manager, Caddy, Traefik …) und `TRUST_PROXY=true` setzen.
 
@@ -331,7 +365,7 @@ npm run build     # Produktions-Build
 
 **MC-Dashboard** is a self-hosted web dashboard for Minecraft Java servers that works **purely over RCON**, so no plugins or mods are needed. It shows online players (including Bedrock players via Geyser/Floodgate) with coordinates, health, hunger, XP and **full inventories** (hotbar, armor, offhand, ender chest, shulker contents) in an in-game-style grid. It also offers a pannable/zoomable 2D map per dimension, an RCON console with color codes and confirmation for dangerous commands, playtime tracking, a pause switch, and a self-diagnosis page. It runs as a single multi-arch Docker container (`ghcr.io/irgendeinjohan/mcrcondocker:latest`) and works well as a home-screen web app on phones.
 
-**This project was 100 % "vibecoded":** all code, tests and docs were written by AI (Claude by Anthropic), tested against a real Paper 26.3 server. The UI and documentation are in German.
+**This project was 100 % "vibecoded":** all code, tests and docs were written by AI (Claude by Anthropic), tested against a real Paper 26.3 server. The UI supports English and German; the original documentation below is in German.
 
 Quick start: enable RCON in `server.properties`, then run the container with `DASHBOARD_PASSWORD`, `RCON_HOST`, `RCON_PORT` and `RCON_PASSWORD` set, and open port 8080. Use `MOCK=true` for a demo without a server.
 

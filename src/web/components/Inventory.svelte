@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { live } from "../lib/live.svelte";
   import type { Item, PlayerData } from "../../shared/types";
   import ItemSlot from "./ItemSlot.svelte";
 
@@ -18,40 +20,44 @@
   const ender = $derived(data.enderChest ? bySlot(data.enderChest, 0, 27) : null);
 </script>
 
+{#if live.assets && !live.assets.textures}
+  <p class="muted">{tr("Keine Texturen installiert. Für korrekte Inventarsymbole: npm run assets:download.")}</p>
+{/if}
 <div class="inv">
   <div class="mc-grid top">
     <div class="armor">
-      <div class="mc-label">Rüstung</div>
-      <ItemSlot item={data.armor.head} placeholder="Kopf" />
-      <ItemSlot item={data.armor.chest} placeholder="Brust" />
-      <ItemSlot item={data.armor.legs} placeholder="Beine" />
-      <ItemSlot item={data.armor.feet} placeholder="Füße" />
+      <div class="mc-label">{tr("Rüstung")}</div>
+      <ItemSlot item={data.armor.head} equipment="head" placeholder={tr("Kopf")} />
+      <ItemSlot item={data.armor.chest} equipment="chest" placeholder={tr("Brust")} />
+      <ItemSlot item={data.armor.legs} equipment="legs" placeholder={tr("Beine")} />
+      <ItemSlot item={data.armor.feet} equipment="feet" placeholder={tr("Füße")} />
     </div>
     <div class="offhand">
       <div class="mc-label">Offhand</div>
-      <ItemSlot item={data.offhand} placeholder="Off" />
+      <ItemSlot item={data.offhand} equipment="offhand" placeholder={tr("Off")} />
     </div>
   </div>
 
   <div class="mc-grid">
-    <div class="mc-label">Inventar</div>
+    <div class="mc-label">{tr("Inventar")}</div>
     <div class="rows">
       {#each main as it, i (i)}<ItemSlot item={it} />{/each}
     </div>
     <div class="gap"></div>
+    <div class="mc-label">{tr("Hotbar")}</div>
     <div class="rows">
       {#each hotbar as it, i (i)}<ItemSlot item={it} selected={i === data.selectedSlot} />{/each}
     </div>
   </div>
 
   <div class="mc-grid">
-    <div class="mc-label">Enderkiste</div>
+    <div class="mc-label">{tr("Enderkiste")}</div>
     {#if ender}
       <div class="rows">
         {#each ender as it, i (i)}<ItemSlot item={it} />{/each}
       </div>
     {:else}
-      <div class="mc-label" style="font-weight:400">nicht verfügbar</div>
+      <div class="mc-label" style="font-weight:400">{tr("nicht verfügbar")}</div>
     {/if}
   </div>
 </div>

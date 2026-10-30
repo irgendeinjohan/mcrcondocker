@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import MinecraftIcon from "./MinecraftIcon.svelte";
   import type { PlayerSummary } from "../../shared/types";
   import { ago, coord, dateTime, dimColor, dimLabel } from "../lib/format";
   import { live } from "../lib/live.svelte";
@@ -22,11 +24,11 @@
   </div>
   <div class="row3 muted">
     {#if p.online}
-      {#if p.health !== null}<span>♥ {Math.round(p.health * 10) / 10}</span>{/if}
-      {#if p.food !== null}<span>🍗 {p.food}</span>{/if}
+      {#if p.health !== null}<span><MinecraftIcon gui="health_full" size={14} /> {Math.round(p.health * 10) / 10}</span>{/if}
+      {#if p.food !== null}<span><MinecraftIcon gui="food_full" size={14} /> {p.food}</span>{/if}
       {#if p.xpLevel !== null}<span>Lvl {p.xpLevel}</span>{/if}
     {:else}
-      <span title={dateTime(p.lastSeen)}>zuletzt gesehen {ago(p.lastSeen, live.now)}</span>
+      <span title={dateTime(p.lastSeen)}>{tr("zuletzt gesehen")} {ago(p.lastSeen, live.now)}</span>
     {/if}
   </div>
 </button>

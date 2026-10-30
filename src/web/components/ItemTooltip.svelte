@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { itemName, gameName, itemDetail } from "../lib/game-text.svelte";
   import type { Item } from "../../shared/types";
   import { roman } from "../lib/format";
   import { tooltip } from "../lib/tooltip.svelte";
@@ -51,17 +53,17 @@
     role="tooltip"
   >
     <div class="name" class:custom={it.hasCustomName}>
-      <McText segments={it.name} fallbackColor={it.glint ? "#55ffff" : "#ffffff"} />
+      <McText segments={itemName(it)} fallbackColor={it.glint ? "#55ffff" : "#ffffff"} />
       {#if it.count > 1}<span class="cnt">× {it.count}</span>{/if}
     </div>
     {#each it.enchantments as e (e.id)}
-      <div class="ench">{e.name} {roman(e.level)}</div>
+      <div class="ench">{gameName(e.id, "enchantment", e.name)} {roman(e.level)}</div>
     {/each}
     {#each it.storedEnchantments as e (e.id)}
-      <div class="ench stored">{e.name} {roman(e.level)}</div>
+      <div class="ench stored">{gameName(e.id, "enchantment", e.name)} {roman(e.level)}</div>
     {/each}
     {#each it.details as d, i (i)}
-      <div class="detail">{d}</div>
+      <div class="detail">{it.detailMessages?.[i] ? itemDetail(it.detailMessages[i]!) : d}</div>
     {/each}
     {#if it.lore}
       {#each it.lore as line, i (i)}
@@ -75,17 +77,17 @@
         {/each}
       </div>
     {:else if it.containerSize}
-      <div class="detail">leer</div>
+      <div class="detail">{tr("leer")}</div>
     {/if}
-    {#if it.unbreakable}<div class="info">Unzerbrechlich</div>{/if}
+    {#if it.unbreakable}<div class="info">{tr("Unzerbrechlich")}</div>{/if}
     {#if it.maxDamage}
-      <div class="info">Haltbarkeit: {it.maxDamage - (it.damage ?? 0)} / {it.maxDamage}</div>
+      <div class="info">{tr("Haltbarkeit:")} {it.maxDamage - (it.damage ?? 0)} / {it.maxDamage}</div>
     {:else if it.damage}
-      <div class="info">Schaden: {it.damage}</div>
+      <div class="info">{tr("Schaden:")} {it.damage}</div>
     {/if}
     <div class="id">{it.id}</div>
     {#if tooltip.pinned}
-      <button class="close" onclick={() => tooltip.close()} aria-label="Schließen">×</button>
+      <button class="close" onclick={() => tooltip.close()} aria-label={tr("Schließen")}>×</button>
     {/if}
   </div>
 {/if}

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { RenderAssets } from "./render-assets.js";
+import { Backups } from "./backups.js";
 import { buildApp } from "./app.js";
 import { ActionService } from "./actions.js";
 import { Assets } from "./assets.js";
@@ -54,7 +56,7 @@ async function main(): Promise<void> {
   }
 
   const rcon = new RconClient({ host: rconTarget.host, port: rconTarget.port, password: rconTarget.password, commandTimeoutMs: rconTarget.timeoutMs });
-  const assets = new Assets(config.assetsDir, process.env.LANGUAGE_FILE || "de_de", (m) => console.log(`[assets] ${m}`));
+  const assets = new Assets(config.assetsDir, process.env.LANGUAGE_FILE || "de_de", (m) => console.log(`[assets] ${m}`), path.resolve(process.env.BUNDLED_ASSETS_DIR || "./game-assets"));
   const tracker = new SessionTracker(repo);
   const poller = new Poller(rcon, repo, tracker, diag, {
     pollIntervalMs: config.pollIntervalMs,
@@ -64,10 +66,13 @@ async function main(): Promise<void> {
     version,
   }, assets.translate);
   const actions = new ActionService(rcon, repo, diag, { nameOf: (uuid) => poller.nameOf(uuid) });
-  const consoleService = new ConsoleService(rcon, diag, config.extraDangerous, (cmd, ok, out) => actions.audit("console", cmd, cmd, ok, out));
-  const app = await buildApp({ config, repo, poller, console: consoleService, actions, diag, rcon, assets, version });
+  const consoleService = new ConsoleService(rcon, diag, config.extraDangerous, (cmd, ok, out, actor) => actions.audit("console", cmd, cmd, ok, out, actor));
+  const renderAssets = new RenderAssets(config.assetsDir, path.resolve(process.env.BUNDLED_ASSETS_DIR || "./game-assets"), process.env.MINECRAFT_ASSET_VERSION || "26.3");
+  const backups = new Backups(db, config.backup.directory, config.backup.keep);
+  const app = await buildApp({ config, repo, poller, console: consoleService, actions, diag, rcon, assets, version, backups, renderAssets });
 
   rcon.on("state", (s: string, err: string | null) => app.log.info(`RCON: ${s}${err ? ` (${err})` : ""}`));
+  await backups.start(config.backup.intervalMs, (e) => app.log.error({ err: e }, "SQLite backup failed"));
   rcon.start();
   poller.start();
   await app.listen({ port: config.port, host: config.host });
@@ -81,6 +86,8 @@ async function main(): Promise<void> {
     poller.stop();
     rcon.stop();
     await app.close().catch(() => {});
+    await backups.stop();
+    renderAssets.close();
     await mockServer?.close();
     db.close();
     process.exit(0);

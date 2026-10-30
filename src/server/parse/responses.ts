@@ -1,3 +1,4 @@
+import { diagnostic } from "../../shared/diagnostic-messages.js";
 // Parser für die Textantworten der RCON-Befehle.
 import { stripLegacy } from "../../shared/mctext.js";
 import type { Warn } from "./diagnostics.js";
@@ -22,7 +23,7 @@ export function parseList(body: string, warn: Warn): ListResult | null {
   const text = stripLegacy(body).replace(/\r/g, "");
   const m = /There are (\d+) (?:of a max of|out of maximum) (\d+) players online:?(.*)$/s.exec(text);
   if (!m) {
-    warn("error", "list-unreadable", "Antwort auf /list konnte nicht gelesen werden", body.slice(0, 200));
+    warn("error", "list-unreadable", diagnostic("listUnreadable"), body.slice(0, 200));
     return null;
   }
   const online = Number(m[1]);
@@ -43,12 +44,12 @@ export function parseList(body: string, warn: Warn): ListResult | null {
       // ohne UUIDs (/list): Namen durch ", " getrennt
       for (const n of rest.split(", ")) if (n.trim()) players.push({ name: n.trim(), uuid: null });
     } else if (consumed < rest.length && !truncated) {
-      warn("warn", "list-leftover", "Teil der /list-Antwort nicht zuordenbar", rest.slice(consumed, consumed + 100));
+      warn("warn", "list-leftover", diagnostic("listLeftover"), rest.slice(consumed, consumed + 100));
     }
   }
   if (players.length !== online && !truncated) {
     // Paper kann Spieler ausblenden (vanish); nur Hinweis
-    warn("info", "list-count-mismatch", `/list meldet ${online} Spieler, gelesen wurden ${players.length}`);
+    warn("info", "list-count-mismatch", diagnostic("listCountMismatch", { online, parsed: players.length }));
   }
   return { online, max, players, truncated };
 }
@@ -80,12 +81,12 @@ export function parseTps(body: string, warn: Warn): number[] | null {
   const text = stripLegacy(body);
   const idx = text.lastIndexOf(":");
   if (!/TPS/i.test(text) || idx < 0) {
-    warn("warn", "tps-unreadable", "Antwort auf /tps konnte nicht gelesen werden", body.slice(0, 200));
+    warn("warn", "tps-unreadable", diagnostic("tpsUnreadable"), body.slice(0, 200));
     return null;
   }
   const nums = [...text.slice(idx + 1).matchAll(/\*?(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1]));
   if (nums.length < 1) {
-    warn("warn", "tps-unreadable", "Antwort auf /tps enthielt keine Zahlen", body.slice(0, 200));
+    warn("warn", "tps-unreadable", diagnostic("tpsNoNumbers"), body.slice(0, 200));
     return null;
   }
   return nums.slice(0, 3);
@@ -100,7 +101,7 @@ export function parseMspt(body: string, warn: Warn): { avg: number; min: number;
     max: Number(m[3]),
   }));
   if (!triples.length) {
-    warn("warn", "mspt-unreadable", "Antwort auf /mspt konnte nicht gelesen werden", body.slice(0, 200));
+    warn("warn", "mspt-unreadable", diagnostic("msptUnreadable"), body.slice(0, 200));
     return null;
   }
   return triples.slice(0, 3);
@@ -131,22 +132,22 @@ export function parseEntityDump(body: string, warn: Warn): EntityDump {
     // unbekanntes Format: erstes "{" versuchen
     start = text.indexOf("{");
     if (start < 0) {
-      warn("error", "entity-unreadable", "Spielerdaten-Antwort konnte nicht gelesen werden", text.slice(0, 300));
+      warn("error", "entity-unreadable", diagnostic("entityUnreadable"), text.slice(0, 300));
       return { kind: "error", message: text.slice(0, 300) };
     }
-    warn("warn", "entity-unknown-prefix", "Spielerdaten-Antwort hat ein unbekanntes Format, versuche trotzdem zu lesen", text.slice(0, 120));
+    warn("warn", "entity-unknown-prefix", diagnostic("entityUnknownPrefix"), text.slice(0, 120));
   }
   const r = parseSnbt(text, start);
   if (!isCompound(r.value)) {
-    warn("error", "entity-not-compound", "Spielerdaten sind kein Compound", text.slice(start, start + 200));
+    warn("error", "entity-not-compound", diagnostic("entityNotCompound"), text.slice(start, start + 200));
     return { kind: "error", message: "Spielerdaten nicht lesbar" };
   }
   if (r.truncated) {
-    warn("warn", "entity-truncated", "Spielerdaten waren abgeschnitten – es wird nur ein Teil angezeigt", r.error?.message);
+    warn("warn", "entity-truncated", diagnostic("entityTruncated"), r.error?.messageData ?? r.error?.message);
   } else if (r.error) {
-    warn("warn", "entity-parse-error", `SNBT-Fehler an Position ${r.error.pos}: ${r.error.message}`, text.slice(Math.max(0, r.error.pos - 60), r.error.pos + 60));
+    warn("warn", "entity-parse-error", diagnostic("entityParseError", { position: r.error.pos, error: r.error.message }, r.error.messageData ? { error: r.error.messageData } : undefined), text.slice(Math.max(0, r.error.pos - 60), r.error.pos + 60));
   } else if (r.end < text.length && text.slice(r.end).trim()) {
-    warn("info", "entity-trailing", "Nach den Spielerdaten folgte weiterer Text", text.slice(r.end, r.end + 100));
+    warn("info", "entity-trailing", diagnostic("entityTrailing"), text.slice(r.end, r.end + 100));
   }
   return { kind: "ok", nbt: r.value, truncated: r.truncated || !!r.error };
 }

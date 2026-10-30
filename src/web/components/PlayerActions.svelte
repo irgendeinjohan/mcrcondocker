@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import MinecraftIcon from "./MinecraftIcon.svelte";
   import type { GameMode, PlayerData, PlayerDetail, Vec3 } from "../../shared/types";
   import { actions } from "../lib/actions.svelte";
   import { api } from "../lib/api";
@@ -44,14 +46,14 @@
 </script>
 
 <div class="player-actions panel">
-  <h3>Aktionen</h3>
+  <h3>{tr("Aktionen")}</h3>
   {#if !online}
-    <p class="muted small">Spieler ist offline – nur Bann und Operator-Rechte sind möglich.</p>
+    <p class="muted small">{tr("Spieler ist offline – nur Bann und Operator-Rechte sind möglich.")}</p>
   {/if}
 
   {#if online}
     <section>
-      <div class="k">Spielmodus</div>
+      <div class="k">{tr("Spielmodus")}</div>
       <div class="row">
         {#each modes as m (m)}
           <button
@@ -60,25 +62,25 @@
             disabled={busy || data?.gameMode === m}
             onclick={() => actions.run({ type: "gamemode", uuid, mode: m })}
           >
-            {GAME_MODES[m]}
+            {tr(GAME_MODES[m])}
           </button>
         {/each}
-        <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "heal", uuid })}>❤ Heilen</button>
-        <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "feed", uuid })}>🍗 Sättigen</button>
+        <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "heal", uuid })}><MinecraftIcon gui="health_full" size={16} /> {tr("❤ Heilen")}</button>
+        <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "feed", uuid })}><MinecraftIcon item="minecraft:cooked_beef" size={16} /> {tr("🍗 Sättigen")}</button>
       </div>
     </section>
 
     <section>
-      <div class="k">Teleportieren</div>
+      <div class="k">{tr("Teleportieren")}</div>
       <div class="row">
-        <select bind:value={target} aria-label="Anderer Spieler">
-          <option value="">Spieler wählen …</option>
+        <select bind:value={target} aria-label={tr("Anderer Spieler")}>
+          <option value="">{tr("Spieler wählen …")}</option>
           {#each others as p (p.uuid)}
             <option value={p.uuid}>{p.name}</option>
           {/each}
         </select>
-        <button class="btn small" disabled={busy || !target} onclick={() => actions.run({ type: "tp_player", uuid, target })}>Hin teleportieren</button>
-        <button class="btn small" disabled={busy || !target} onclick={() => actions.run({ type: "tp_player", uuid: target, target: uuid })}>Herholen</button>
+        <button class="btn small" disabled={busy || !target} onclick={() => actions.run({ type: "tp_player", uuid, target })}>{tr("Hin teleportieren")}</button>
+        <button class="btn small" disabled={busy || !target} onclick={() => actions.run({ type: "tp_player", uuid: target, target: uuid })}>{tr("Herholen")}</button>
       </div>
       <form
         class="row"
@@ -92,38 +94,38 @@
         <input class="c" inputmode="decimal" placeholder="Z" aria-label="Z" bind:value={tp.z} />
         <select bind:value={tp.dim} aria-label="Dimension">
           {#each Object.entries(DIMENSIONS) as [id, d] (id)}
-            <option value={id}>{d.label}</option>
+            <option value={id}>{tr(d.label)}</option>
           {/each}
         </select>
-        <button class="btn small" type="submit" disabled={busy || !tpValid}>Teleportieren</button>
+        <button class="btn small" type="submit" disabled={busy || !tpValid}>{tr("Teleportieren")}</button>
       </form>
       <div class="row">
         {#if data?.lastDeath}
           {@const ld = data.lastDeath}
           <button class="btn small" disabled={busy} onclick={() => tpTo(ld.dimension, ld.pos)} title={`${dimLabel(ld.dimension)} ${coord(ld.pos.x)} / ${coord(ld.pos.y)} / ${coord(ld.pos.z)}`}>
-            💀 Zum Todespunkt
+            <MinecraftIcon item="minecraft:skeleton_skull" size={16} /> {tr("💀 Zum Todespunkt")}
           </button>
         {/if}
         {#if data?.respawn}
           {@const rs = data.respawn}
           <button class="btn small" disabled={busy} onclick={() => tpTo(rs.dimension, rs.pos)} title={`${dimLabel(rs.dimension)} ${coord(rs.pos.x)} / ${coord(rs.pos.y)} / ${coord(rs.pos.z)}`}>
-            🛏 Zum Spawnpunkt
+            <MinecraftIcon item="minecraft:red_bed" size={16} /> {tr("🛏 Zum Spawnpunkt")}
           </button>
         {/if}
         {#if worldSpawn}
           {@const ws = worldSpawn}
-          <button class="btn small" disabled={busy} onclick={() => tpTo("minecraft:overworld", ws)}>🏠 Zum Weltspawn</button>
+          <button class="btn small" disabled={busy} onclick={() => tpTo("minecraft:overworld", ws)}><MinecraftIcon item="minecraft:compass" size={16} /> {tr("🏠 Zum Weltspawn")}</button>
         {:else}
-          <span class="faint small">Weltspawn lässt sich auf der <a href="#/world">Welt-Seite</a> hinterlegen.</span>
+          <span class="faint small">{tr("Weltspawn lässt sich auf der")} <a href="#/world">{tr("Welt-Seite")}</a> {tr("hinterlegen.")}</span>
         {/if}
       </div>
     </section>
 
     <section>
-      <div class="k">Items geben</div>
+      <div class="k">{tr("Items geben")}</div>
       <div class="row">
         <ItemPicker onpick={(id) => (item = id)} />
-        <input class="cnt" type="number" min="1" max="6400" bind:value={count} aria-label="Anzahl" />
+        <input class="cnt" type="number" min="1" max="6400" bind:value={count} aria-label={tr("Anzahl")} />
         {#each [1, 16, 64] as n (n)}
           <button class="btn small" class:primary={count === n} onclick={() => (count = n)}>{n}</button>
         {/each}
@@ -132,16 +134,16 @@
           disabled={busy || !item || !(count >= 1 && count <= 6400)}
           onclick={() => item && actions.run({ type: "give", uuid, item, count: Math.floor(count) })}
         >
-          Geben
+          {tr("Geben")}
         </button>
       </div>
       <div class="row">
-        <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "clear", uuid })}>Inventar leeren</button>
+        <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "clear", uuid })}>{tr("Inventar leeren")}</button>
       </div>
     </section>
 
     <section>
-      <div class="k">Private Nachricht</div>
+      <div class="k">{tr("Private Nachricht")}</div>
       <form
         class="row"
         onsubmit={async (e) => {
@@ -149,24 +151,24 @@
           if (message.trim() && (await actions.run({ type: "msg", uuid, text: message }))?.ok) message = "";
         }}
       >
-        <input class="grow" maxlength="256" placeholder="Nachricht an {detail.name} …" bind:value={message} />
-        <button class="btn small" type="submit" disabled={busy || !message.trim()}>Senden</button>
+        <input class="grow" maxlength="256" placeholder="{tr("Nachricht an")} {detail.name} …" bind:value={message} />
+        <button class="btn small" type="submit" disabled={busy || !message.trim()}>{tr("Senden")}</button>
       </form>
     </section>
   {/if}
 
   <section>
-    <div class="k">Verwaltung</div>
+    <div class="k">{tr("Verwaltung")}</div>
     <div class="row">
-      <input class="grow" maxlength="256" placeholder="Grund (optional, für Kick/Bann)" bind:value={reason} />
+      <input class="grow" maxlength="256" placeholder={tr("Grund (optional, für Kick/Bann)")} bind:value={reason} />
     </div>
     <div class="row">
       {#if online}
-        <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "kick", uuid, reason })}>Kicken</button>
+        <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "kick", uuid, reason })}>{tr("Kicken")}</button>
       {/if}
-      <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "ban", uuid, reason })}>Bannen</button>
-      <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "op", uuid })}>OP geben</button>
-      <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "deop", uuid })}>OP entziehen</button>
+      <button class="btn small danger" disabled={busy} onclick={() => actions.run({ type: "ban", uuid, reason })}>{tr("Bannen")}</button>
+      <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "op", uuid })}>{tr("OP geben")}</button>
+      <button class="btn small" disabled={busy} onclick={() => actions.run({ type: "deop", uuid })}>{tr("OP entziehen")}</button>
     </div>
   </section>
 </div>

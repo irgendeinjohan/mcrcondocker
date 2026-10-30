@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
   import { parseLegacy } from "../../shared/mctext";
   import { actions } from "../lib/actions.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
@@ -7,8 +8,8 @@
 
 <ConfirmDialog
   open={!!actions.confirm}
-  title="Aktion bestätigen"
-  message={actions.confirm ? `${actions.confirm.reason} Wirklich ausführen?` : ""}
+  title={tr("Aktion bestätigen")}
+  message={actions.confirm ? `${actions.confirm.reason} ${tr("Wirklich ausführen?")}` : ""}
   detail={actions.confirm?.label ?? ""}
   onconfirm={() => actions.answer(true)}
   oncancel={() => actions.answer(false)}
@@ -16,7 +17,7 @@
 
 <div class="toasts" aria-live="polite">
   {#each actions.toasts as t (t.id)}
-    <button class="toast" class:err={!t.ok} onclick={() => actions.dismiss(t.id)} title="Schließen">
+    <button class="toast" class:err={!t.ok} onclick={() => actions.dismiss(t.id)} title={tr("Schließen")}>
       <div class="t">{t.ok ? "✓" : "✕"} {t.title}</div>
       {#if t.detail}<div class="d mono"><McText segments={parseLegacy(t.detail)} /></div>{/if}
     </button>

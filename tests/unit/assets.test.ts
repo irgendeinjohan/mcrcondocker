@@ -89,6 +89,43 @@ describe("Assets", () => {
     expect(a.icon("minecraft:stone")).toBeNull();
   });
 
+  it("prefers rendered inventory icons, respects overrides, and isolates namespaces", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mcdash-rendered-"));
+    const fallback = mkdtempSync(path.join(tmpdir(), "mcdash-bundled-"));
+    for (const base of [dir, fallback]) mkdirSync(path.join(base, "icons", "minecraft"), { recursive: true });
+    mkdirSync(path.join(dir, "icons", "custom"), { recursive: true });
+    mkdirSync(path.join(dir, "textures", "block"), { recursive: true });
+    mkdirSync(path.join(fallback, "gui"), { recursive: true });
+    writeFileSync(path.join(dir, "icons", "minecraft", "chest.png"), PNG_A);
+    writeFileSync(path.join(fallback, "icons", "minecraft", "chest.png"), PNG_B);
+    writeFileSync(path.join(fallback, "icons", "minecraft", "shield.png"), PNG_B);
+    writeFileSync(path.join(dir, "icons", "custom", "chest.png"), PNG_B);
+    writeFileSync(path.join(dir, "textures", "block", "chest_front.png"), PNG_B);
+    writeFileSync(path.join(fallback, "gui", "food_half.png"), PNG_A);
+    const assets = new Assets(dir, "de_de", undefined, fallback);
+    expect(assets.info().textures).toBe("rendered");
+    expect(assets.icon("minecraft:chest")).toEqual(PNG_A);
+    expect(assets.icon("chest")).toEqual(PNG_A);
+    expect(assets.icon("custom:chest")).toEqual(PNG_B);
+    expect(assets.icon("other:chest")).toBeNull();
+    expect(assets.icon("minecraft:shield")).toEqual(PNG_B);
+    expect(assets.icon("minecraft:../chest")).toBeNull();
+    expect(assets.gui("food_half")).toEqual(PNG_A);
+    expect(assets.gui("../../etc/passwd")).toBeNull();
+  });
+
+  it("loads game names per language with English fallback and no arbitrary file access", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mcdash-locales-"));
+    mkdirSync(path.join(dir, "lang"), { recursive: true });
+    writeFileSync(path.join(dir, "lang", "en_us.json"), JSON.stringify({ "item.minecraft.apple": "Apple", "item.minecraft.shield": "Shield" }));
+    writeFileSync(path.join(dir, "lang", "de_de.json"), JSON.stringify({ "item.minecraft.apple": "Apfel" }));
+    const assets = new Assets(dir);
+    expect(assets.translations("de")).toMatchObject({ "item.minecraft.apple": "Apfel", "item.minecraft.shield": "Shield" });
+    expect(assets.items("en")).toContainEqual({ id: "apple", name: "Apple" });
+    expect(assets.items("de")).toContainEqual({ id: "apple", name: "Apfel" });
+    expect(assets.translations("../../secrets")).toEqual(assets.translations("en"));
+  });
+
   it("ZipReader liest auch unkomprimierte Einträge", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "mcdash-zip-"));
     const f = path.join(dir, "x.zip");

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../../lib/i18n.svelte";
   import { actions } from "../../lib/actions.svelte";
   import { live } from "../../lib/live.svelte";
 
@@ -14,8 +15,8 @@
 
 <div class="grid">
   <section class="panel">
-    <h3>Chat-Nachricht an alle</h3>
-    <p class="faint small">Erscheint im Chat als „[Rcon] …“ bzw. „[Server] …“.</p>
+    <h3>{tr("Chat-Nachricht an alle")}</h3>
+    <p class="faint small">{tr("Erscheint im Chat als „[Rcon] …“ bzw. „[Server] …“.")}</p>
     <form
       class="row"
       onsubmit={async (e) => {
@@ -23,14 +24,14 @@
         if (say.trim() && (await actions.run({ type: "say", text: say }))?.ok) say = "";
       }}
     >
-      <input class="grow" maxlength="256" placeholder="Nachricht …" bind:value={say} />
-      <button class="btn primary" type="submit" disabled={busy || !say.trim()}>Senden</button>
+      <input class="grow" maxlength="256" placeholder={tr("Nachricht …")} bind:value={say} />
+      <button class="btn primary" type="submit" disabled={busy || !say.trim()}>{tr("Senden")}</button>
     </form>
   </section>
 
   <section class="panel">
-    <h3>Titel auf dem Bildschirm</h3>
-    <p class="faint small">Große Einblendung in der Bildschirmmitte bei allen Spielern (ca. 5 Sekunden).</p>
+    <h3>{tr("Titel auf dem Bildschirm")}</h3>
+    <p class="faint small">{tr("Große Einblendung in der Bildschirmmitte bei allen Spielern (ca. 5 Sekunden).")}</p>
     <form
       class="col"
       onsubmit={async (e) => {
@@ -41,14 +42,14 @@
         }
       }}
     >
-      <input maxlength="256" placeholder="Titel, z. B. Neustart in 5 Minuten" bind:value={title} />
-      <input maxlength="256" placeholder="Untertitel (optional)" bind:value={subtitle} />
-      <div><button class="btn primary" type="submit" disabled={busy || !title.trim()}>Anzeigen</button></div>
+      <input maxlength="256" placeholder={tr("Titel, z. B. Neustart in 5 Minuten")} bind:value={title} />
+      <input maxlength="256" placeholder={tr("Untertitel (optional)")} bind:value={subtitle} />
+      <div><button class="btn primary" type="submit" disabled={busy || !title.trim()}>{tr("Anzeigen")}</button></div>
     </form>
   </section>
 
   <section class="panel">
-    <h3>Private Nachricht</h3>
+    <h3>{tr("Private Nachricht")}</h3>
     <form
       class="col"
       onsubmit={async (e) => {
@@ -56,16 +57,16 @@
         if (target && msg.trim() && (await actions.run({ type: "msg", uuid: target, text: msg }))?.ok) msg = "";
       }}
     >
-      <select bind:value={target} aria-label="Spieler">
-        <option value="">Spieler wählen …</option>
+      <select bind:value={target} aria-label={tr("Spieler")}>
+        <option value="">{tr("Spieler wählen …")}</option>
         {#each online as p (p.uuid)}
           <option value={p.uuid}>{p.name}</option>
         {/each}
       </select>
-      <input maxlength="256" placeholder="Nachricht …" bind:value={msg} />
-      <div><button class="btn primary" type="submit" disabled={busy || !target || !msg.trim()}>Senden</button></div>
+      <input maxlength="256" placeholder={tr("Nachricht …")} bind:value={msg} />
+      <div><button class="btn primary" type="submit" disabled={busy || !target || !msg.trim()}>{tr("Senden")}</button></div>
     </form>
-    {#if !online.length}<div class="faint small">Niemand online.</div>{/if}
+    {#if !online.length}<div class="faint small">{tr("Niemand online.")}</div>{/if}
   </section>
 </div>
 

@@ -1,6 +1,9 @@
 // Typisierte Datenbankzugriffe.
 import type { AuditEntry, GapEntry, GameMode, PlayerData, SessionEntry } from "../../shared/types.js";
+import type { DashboardUser } from "../../shared/users.js";
 import type { Db } from "./db.js";
+
+export interface UserRow extends Omit<DashboardUser, "enabled" | "bootstrap"> { password_hash: string; enabled: number; bootstrap: number }
 
 export interface PlayerRow {
   uuid: string;
@@ -131,8 +134,8 @@ export class Repo {
   // --- Aktionsprotokoll ---
   addAudit(e: Omit<AuditEntry, "id">): AuditEntry {
     const r = this.db
-      .prepare("INSERT INTO audit_log (at, source, label, command, ok, output) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(e.at, e.source, e.label, e.command, e.ok ? 1 : 0, e.output);
+      .prepare("INSERT INTO audit_log (at, source, label, command, ok, output, actor) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(e.at, e.source, e.label, e.command, e.ok ? 1 : 0, e.output, e.actor ?? null);
     const id = Number(r.lastInsertRowid);
     // nur die letzten Einträge behalten
     if (id % 100 === 0) this.db.prepare("DELETE FROM audit_log WHERE id <= ?").run(id - AUDIT_KEEP);
@@ -143,30 +146,41 @@ export class Repo {
     const rows = (before
       ? this.db.prepare("SELECT * FROM audit_log WHERE id < ? ORDER BY id DESC LIMIT ?").all(before, limit)
       : this.db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?").all(limit)) as unknown as RawAudit[];
-    return rows.map((r) => ({ id: r.id, at: r.at, source: r.source as AuditEntry["source"], label: r.label, command: r.command, ok: r.ok === 1, output: r.output }));
+    return rows.map((r) => ({ id: r.id, at: r.at, source: r.source as AuditEntry["source"], label: r.label, command: r.command, ok: r.ok === 1, output: r.output, actor: r.actor ?? null }));
   }
 
-  // --- Login-Sessions ---
-  createAuthSession(tokenHash: string, now: number, expiresAt: number): void {
-    this.db.prepare("INSERT INTO auth_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)").run(tokenHash, now, expiresAt);
+  // --- Dashboard identities and login sessions ---
+  listUsers(): UserRow[] { return this.db.prepare("SELECT * FROM dashboard_users ORDER BY username COLLATE NOCASE").all() as unknown as UserRow[]; }
+  userByName(username: string): UserRow | undefined { return this.db.prepare("SELECT * FROM dashboard_users WHERE username = ? COLLATE NOCASE").get(username) as unknown as UserRow | undefined; }
+  userById(id: number): UserRow | undefined { return this.db.prepare("SELECT * FROM dashboard_users WHERE id = ?").get(id) as unknown as UserRow | undefined; }
+  addUser(username: string, passwordHash: string, role: "viewer" | "operator", bootstrap = false): UserRow {
+    const result = this.db.prepare("INSERT INTO dashboard_users(username, password_hash, role, bootstrap) VALUES (?, ?, ?, ?)").run(username, passwordHash, role, bootstrap ? 1 : 0);
+    return this.userById(Number(result.lastInsertRowid))!;
   }
+  updateUser(id: number, role: "viewer" | "operator", enabled: boolean, passwordHash?: string): void {
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare("UPDATE dashboard_users SET role = ?, enabled = ?, password_hash = COALESCE(?, password_hash) WHERE id = ?").run(role, enabled ? 1 : 0, passwordHash ?? null, id);
+      this.db.prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(id);
+      this.db.exec("COMMIT");
+    } catch (e) { this.db.exec("ROLLBACK"); throw e; }
+  }
+  createAuthSession(tokenHash: string, now: number, expiresAt: number, userId: number): void {
+    this.db.prepare("INSERT INTO auth_sessions (token_hash, created_at, expires_at, user_id) VALUES (?, ?, ?, ?)").run(tokenHash, now, expiresAt, userId);
+  }
+  sessionUser(tokenHash: string, now: number): UserRow | undefined {
+    return this.db.prepare("SELECT u.* FROM auth_sessions s JOIN dashboard_users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.enabled = 1").get(tokenHash, now) as unknown as UserRow | undefined;
+  }
+  validAuthSession(tokenHash: string, now: number): boolean { return !!this.sessionUser(tokenHash, now); }
+  deleteAuthSession(tokenHash: string): void { this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(tokenHash); }
+  purgeAuthSessions(now: number): void { this.db.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").run(now); }
 
-  validAuthSession(tokenHash: string, now: number): boolean {
-    return !!this.db.prepare("SELECT 1 FROM auth_sessions WHERE token_hash = ? AND expires_at > ?").get(tokenHash, now);
-  }
-
-  deleteAuthSession(tokenHash: string): void {
-    this.db.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(tokenHash);
-  }
-
-  purgeAuthSessions(now: number): void {
-    this.db.prepare("DELETE FROM auth_sessions WHERE expires_at <= ?").run(now);
-  }
 }
 
 const AUDIT_KEEP = 5000;
 
 interface RawAudit {
+  actor: string | null;
   id: number;
   at: number;
   source: string;

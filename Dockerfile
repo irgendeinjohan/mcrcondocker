@@ -12,6 +12,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.server.json tsconfig.web.json vite.config.ts ./
 COPY src ./src
+COPY scripts/download-assets.ts scripts/download-models.ts ./scripts/
+RUN npm run assets:download && npm run assets:models
 RUN npm run build
 
 # --- 2) nur Laufzeit-Abhängigkeiten --------------------------------------------
@@ -36,6 +38,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/THIRD-PARTY-LICENSES.md ./
 COPY LICENSE ./
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/game-assets ./game-assets
 COPY package.json ./
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

@@ -1,4 +1,5 @@
 // Manuelle Konsolenbefehle. Funktionieren auch während der Pause.
+import type { Locale } from "../shared/translations.js";
 import { EventEmitter } from "node:events";
 import { dangerousReason } from "../shared/dangerous.js";
 import type { ConsoleEntry, LiveEvent } from "../shared/types.js";
@@ -21,7 +22,7 @@ export class ConsoleService extends EventEmitter {
     private readonly diag: Diagnostics,
     private readonly extraDangerous: string[],
     /** schreibt jeden ausgeführten Befehl ins Aktionsprotokoll */
-    private readonly audit?: (command: string, ok: boolean, output: string) => void,
+    private readonly audit?: (command: string, ok: boolean, output: string, actor?: string) => void,
   ) {
     super();
   }
@@ -30,11 +31,11 @@ export class ConsoleService extends EventEmitter {
     return this.history;
   }
 
-  async run(input: string, confirmed: boolean): Promise<ConsoleResult> {
+  async run(input: string, confirmed: boolean, locale: Locale = "de", actor?: string): Promise<ConsoleResult> {
     const command = input.trim().replace(/^\/+/, "");
     if (!command) return { kind: "invalid", message: "Leerer Befehl" };
     if (/[\r\n]/.test(command)) return { kind: "invalid", message: "Befehl darf keine Zeilenumbrüche enthalten" };
-    const reason = dangerousReason(command, this.extraDangerous);
+    const reason = dangerousReason(command, this.extraDangerous, 0, locale);
     if (reason && !confirmed) return { kind: "needs_confirmation", reason };
     const started = Date.now();
     let entry: ConsoleEntry;
@@ -47,7 +48,7 @@ export class ConsoleService extends EventEmitter {
       this.diag.recordRaw({ at: Date.now(), kind: "console", command, body: "", fragments: 0, bytes: 0, durationMs: Date.now() - started, error: msg });
       entry = { id: this.nextId++, at: started, command, output: `Fehler: ${msg}`, ok: false, durationMs: Date.now() - started };
     }
-    this.audit?.(command, entry.ok, entry.output);
+    this.audit?.(command, entry.ok, entry.output, actor);
     this.history.push(entry);
     if (this.history.length > MAX_HISTORY) this.history.splice(0, this.history.length - MAX_HISTORY);
     this.emit("event", { type: "console", entry } satisfies LiveEvent);

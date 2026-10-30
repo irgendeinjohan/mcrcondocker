@@ -1,3 +1,4 @@
+import { diagnostic } from "../../shared/diagnostic-messages.js";
 // Spieler-NBT → PlayerData. Verträgt das neue Format (equipment, ab 1.21.5)
 // und das alte (Rüstung in Inventar-Slots 100–103, Offhand -106).
 import type { ArmorSlot, Effect, GameMode, Item, PlayerData, Vec3 } from "../../shared/types.js";
@@ -56,7 +57,7 @@ function respawnPoint(nbt: SnbtCompound): { dimension: string; pos: Vec3 } | nul
 export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
   const w = ctx.warn;
   for (const key of Object.keys(nbt)) {
-    if (!KNOWN_FIELDS.has(key)) w("info", `unknown-player-field:${key}`, `Unbekanntes Spielerfeld "${key}" wird ignoriert`);
+    if (!KNOWN_FIELDS.has(key)) w("info", `unknown-player-field:${key}`, diagnostic("unknownPlayerField", { field: key }));
   }
 
   // Position
@@ -67,17 +68,17 @@ export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
     pos.y = p[1] as number;
     pos.z = p[2] as number;
   } else {
-    w("warn", "player-no-pos", "Spielerdaten ohne lesbare Position (Pos)");
+    w("warn", "player-no-pos", diagnostic("playerNoPos"));
   }
 
   let dimension = "unknown";
   if (typeof nbt.Dimension === "string") dimension = nbt.Dimension;
   else if (typeof nbt.Dimension === "number") dimension = OLD_DIMENSIONS[nbt.Dimension] ?? `dim:${nbt.Dimension}`;
-  else w("warn", "player-no-dimension", "Spielerdaten ohne Dimension");
+  else w("warn", "player-no-dimension", diagnostic("playerNoDimension"));
 
   // Lebensenergie
   const health = num(nbt.Health) ?? 0;
-  if (num(nbt.Health) === undefined) w("warn", "player-no-health", "Spielerdaten ohne Health");
+  if (num(nbt.Health) === undefined) w("warn", "player-no-health", diagnostic("playerNoHealth"));
   let maxHealth = 20;
   const attrs = Array.isArray(nbt.attributes) ? nbt.attributes : Array.isArray(nbt.Attributes) ? nbt.Attributes : [];
   for (const a of attrs) {
@@ -104,9 +105,9 @@ export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
     if (armorSlot) armor[armorSlot] = it;
     else if (it.slot === OLD_OFFHAND_SLOT) offhand = it;
     else if (it.slot >= 0 && it.slot <= 35) inventory.push(it);
-    else w("info", `inventory-slot:${it.slot}`, `Inventar-Slot ${it.slot} unbekannt (Item ${it.id})`);
+    else w("info", `inventory-slot:${it.slot}`, diagnostic("inventorySlot", { slot: it.slot, item: it.id }));
   }
-  if (nbt.Inventory === undefined) w("warn", "player-no-inventory", "Spielerdaten ohne Inventory");
+  if (nbt.Inventory === undefined) w("warn", "player-no-inventory", diagnostic("playerNoInventory"));
 
   const eq = nbt.equipment;
   if (isCompound(eq)) {
@@ -116,7 +117,7 @@ export function parsePlayer(nbt: SnbtCompound, ctx: MapContext): PlayerData {
     if (eq.offhand !== undefined) offhand = parseItem(eq.offhand, ctx, "equipment.offhand");
     for (const k of Object.keys(eq)) {
       if (!["head", "chest", "legs", "feet", "offhand", "mainhand", "body", "saddle"].includes(k)) {
-        w("info", `unknown-equipment:${k}`, `Unbekannter Ausrüstungsplatz "${k}"`);
+        w("info", `unknown-equipment:${k}`, diagnostic("unknownEquipment", { slot: k }));
       }
     }
   }

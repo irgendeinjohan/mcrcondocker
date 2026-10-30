@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
   import type { GapEntry, PlayerSessionStats, SessionEntry } from "../../shared/types";
   import { api } from "../lib/api";
   import { ago, dateTime, duration, shortDate } from "../lib/format";
@@ -58,12 +59,12 @@
 <div class="wrap">
   <section class="panel">
     <div class="head">
-      <h2>Online-Zeiten</h2>
+      <h2>{tr("Online-Zeiten")}</h2>
       <label class="muted small">
-        Sortierung
+        {tr("Sortierung")}
         <select bind:value={sort}>
-          <option value="total">Gesamtzeit</option>
-          <option value="last">Zuletzt gesehen</option>
+          <option value="total">{tr("Gesamtzeit")}</option>
+          <option value="last">{tr("Zuletzt gesehen")}</option>
           <option value="name">Name</option>
         </select>
       </label>
@@ -71,7 +72,7 @@
     <div class="scroll-x">
       <table>
         <thead>
-          <tr><th>Spieler</th><th>Gesamt</th><th>Sessions</th><th>Zuletzt gesehen</th></tr>
+          <tr><th>{tr("Spieler")}</th><th>{tr("Gesamt")}</th><th>Sessions</th><th>{tr("Zuletzt gesehen")}</th></tr>
         </thead>
         <tbody>
           {#each sorted as s (s.uuid)}
@@ -83,35 +84,34 @@
               </td>
               <td class="num">{duration(s.totalMs)}</td>
               <td class="num">{s.sessionCount}</td>
-              <td title={dateTime(s.lastSeen)}>{s.online ? "jetzt online" : ago(s.lastSeen, live.now)}</td>
+              <td title={dateTime(s.lastSeen)}>{s.online ? tr("jetzt online") : ago(s.lastSeen, live.now)}</td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
     <p class="faint small">
-      Gezählt wird, solange ein Spieler bei den /list-Abfragen online ist. Zeiten, in denen nicht abgefragt wurde
-      (Pause, Verbindungsfehler, Dashboard aus), gelten als <b>unbekannt</b> und werden weder als online noch als offline gezählt.
+      {tr("Gezählt wird, solange ein Spieler bei den /list-Abfragen online ist. Zeiten, in denen nicht abgefragt wurde (Pause, Verbindungsfehler, Dashboard aus), gelten als")} <b>{tr("unbekannt")}</b> {tr("und werden weder als online noch als offline gezählt.")}
     </p>
   </section>
 
   {#if selected && sessions}
     <section class="panel">
       <div class="head">
-        <h2>{selectedStats?.name ?? "Spieler"} – letzte Sessions</h2>
-        <a class="btn small" href="#/players/{selected}">Spieler ansehen</a>
+        <h2>{selectedStats?.name ?? tr("Spieler")} {tr("– letzte Sessions")}</h2>
+        <a class="btn small" href="#/players/{selected}">{tr("Spieler ansehen")}</a>
       </div>
       {#if sessions.length === 0}
-        <div class="muted">Keine Sessions.</div>
+        <div class="muted">{tr("Keine Sessions.")}</div>
       {:else}
         <div class="scroll-x">
           <table>
-            <thead><tr><th>Beginn</th><th>Ende</th><th>Dauer</th><th>Ende erkannt durch</th></tr></thead>
+            <thead><tr><th>{tr("Beginn")}</th><th>{tr("Ende")}</th><th>{tr("Dauer")}</th><th>{tr("Ende erkannt durch")}</th></tr></thead>
             <tbody>
               {#each sessions as s (s.id)}
                 <tr>
                   <td>{shortDate(s.start)}</td>
-                  <td>{s.end ? shortDate(s.end) : "läuft"}</td>
+                  <td>{s.end ? shortDate(s.end) : tr("läuft")}</td>
                   <td class="num">{duration((s.end ?? live.now) - s.start)}</td>
                   <td>
                     {#if s.end === null}
@@ -119,8 +119,8 @@
                     {:else if s.endReason === "logout"}
                       Logout
                     {:else}
-                      <span class="unknown">unbekannt</span>
-                      {#if gapAfter(s)}<span class="faint">({REASON[gapAfter(s)!.reason]})</span>{/if}
+                      <span class="unknown">{tr("unbekannt")}</span>
+                      {#if gapAfter(s)}<span class="faint">({tr(REASON[gapAfter(s)!.reason])})</span>{/if}
                     {/if}
                   </td>
                 </tr>
@@ -133,20 +133,20 @@
   {/if}
 
   <section class="panel">
-    <h2>Lücken in der Erfassung (30 Tage)</h2>
+    <h2>{tr("Lücken in der Erfassung (30 Tage)")}</h2>
     {#if gaps.length === 0}
-      <div class="muted">Keine Lücken.</div>
+      <div class="muted">{tr("Keine Lücken.")}</div>
     {:else}
       <div class="scroll-x">
         <table>
-          <thead><tr><th>Von</th><th>Bis</th><th>Dauer</th><th>Grund</th></tr></thead>
+          <thead><tr><th>{tr("Von")}</th><th>{tr("Bis")}</th><th>{tr("Dauer")}</th><th>{tr("Grund")}</th></tr></thead>
           <tbody>
             {#each gaps as g (g.id)}
               <tr class="gap">
                 <td>{shortDate(g.start)}</td>
-                <td>{g.end ? shortDate(g.end) : "andauernd"}</td>
+                <td>{g.end ? shortDate(g.end) : tr("andauernd")}</td>
                 <td class="num">{duration((g.end ?? live.now) - g.start)}</td>
-                <td>{REASON[g.reason] ?? g.reason}</td>
+                <td>{tr(REASON[g.reason] ?? g.reason)}</td>
               </tr>
             {/each}
           </tbody>

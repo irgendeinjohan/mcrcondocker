@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { session } from "../lib/session.svelte";
+  import BlueMap from "./BlueMap.svelte";
   import type { PlayerSummary } from "../../shared/types";
   import { actions } from "../lib/actions.svelte";
   import { coord, DIMENSIONS, dimColor, dimLabel } from "../lib/format";
@@ -248,6 +251,7 @@
   }
 
   function openTpMenu(sx: number, sy: number): void {
+    if (!session.operator) return;
     const w = toWorld(sx, sy);
     tpMenu = { x: Math.floor(w.x), z: Math.floor(w.z) };
     if (!onlinePlayers.some((p) => p.uuid === tpPlayer)) tpPlayer = onlinePlayers[0]?.uuid ?? "";
@@ -364,6 +368,8 @@
   }
 </script>
 
+<BlueMap />
+
 <div class="map-view">
   <div class="toolbar">
     <div class="tabs" role="tablist">
@@ -383,9 +389,9 @@
     </div>
     <div class="tools">
       <label class="chk"><input type="checkbox" bind:checked={showOffline} /> Offline</label>
-      <button class="btn small" onclick={() => zoomAt(1.5, size.w / 2, size.h / 2)} aria-label="Hineinzoomen">+</button>
-      <button class="btn small" onclick={() => zoomAt(1 / 1.5, size.w / 2, size.h / 2)} aria-label="Herauszoomen">−</button>
-      <button class="btn small" onclick={fit}>Einpassen</button>
+      <button class="btn small" onclick={() => zoomAt(1.5, size.w / 2, size.h / 2)} aria-label={tr("Hineinzoomen")}>+</button>
+      <button class="btn small" onclick={() => zoomAt(1 / 1.5, size.w / 2, size.h / 2)} aria-label={tr("Herauszoomen")}>−</button>
+      <button class="btn small" onclick={fit}>{tr("Einpassen")}</button>
     </div>
   </div>
   <div class="canvas-wrap" bind:this={wrap}>
@@ -412,41 +418,41 @@
           void teleport();
         }}
       >
-        <div class="tp-title">Teleport nach X {coord(tpMenu.x)} · Z {coord(tpMenu.z)}</div>
+        <div class="tp-title">{tr("Teleport nach X")} {coord(tpMenu.x)} · Z {coord(tpMenu.z)}</div>
         {#if onlinePlayers.length}
-          <select bind:value={tpPlayer} aria-label="Spieler">
+          <select bind:value={tpPlayer} aria-label={tr("Spieler")}>
             {#each onlinePlayers as p (p.uuid)}
               <option value={p.uuid}>{p.name}{p.dimension && p.dimension !== dim ? ` (${dimLabel(p.dimension)})` : ""}</option>
             {/each}
           </select>
-          <input inputmode="decimal" placeholder="Y (leer = auf den Boden)" aria-label="Y" bind:value={tpY} />
+          <input inputmode="decimal" placeholder={tr("Y (leer = auf den Boden)")} aria-label="Y" bind:value={tpY} />
           {#if dim === "minecraft:the_nether" && !tpY.trim()}
-            <div class="faint tp-hint">Im Nether wird unterhalb von Y 120 gesucht.</div>
+            <div class="faint tp-hint">{tr("Im Nether wird unterhalb von Y 120 gesucht.")}</div>
           {/if}
           <div class="tp-btns">
-            <button class="btn small" type="button" onclick={() => (tpMenu = null)}>Abbrechen</button>
-            <button class="btn small primary" type="submit" disabled={!tpPlayer || actions.busy > 0}>Teleportieren</button>
+            <button class="btn small" type="button" onclick={() => (tpMenu = null)}>{tr("Abbrechen")}</button>
+            <button class="btn small primary" type="submit" disabled={!tpPlayer || actions.busy > 0}>{tr("Teleportieren")}</button>
           </div>
         {:else}
-          <div class="faint">Niemand online.</div>
-          <div class="tp-btns"><button class="btn small" type="button" onclick={() => (tpMenu = null)}>Schließen</button></div>
+          <div class="faint">{tr("Niemand online.")}</div>
+          <div class="tp-btns"><button class="btn small" type="button" onclick={() => (tpMenu = null)}>{tr("Schließen")}</button></div>
         {/if}
       </form>
     {/if}
     <div class="hud mono">
-      {#if cursor}X {coord(Math.floor(cursor.x))} · Z {coord(Math.floor(cursor.z))}{:else}Mitte X {coord(Math.round(cx))} · Z {coord(Math.round(cz))}{/if}
-      · {scale >= 1 ? `${Math.round(scale * 10) / 10} px/Block` : `1 px = ${Math.round(1 / scale)} Blöcke`}
+      {#if cursor}X {coord(Math.floor(cursor.x))} · Z {coord(Math.floor(cursor.z))}{:else}{tr("Mitte X")} {coord(Math.round(cx))} · Z {coord(Math.round(cz))}{/if}
+      · {scale >= 1 ? tr("{count} px/Block", { count: Math.round(scale * 10) / 10 }) : tr("1 px = {count} Blöcke", { count: Math.round(1 / scale) })}
     </div>
     {#if visible.length === 0}
-      <div class="empty muted">Keine Spieler in {dimLabel(dim)}.</div>
+      <div class="empty muted">{tr("Keine Spieler in")} {dimLabel(dim)}.</div>
     {/if}
   </div>
   <div class="legend faint">
     <span><span class="lg on"></span>online</span>
     <span><span class="lg br"></span>Bedrock</span>
-    <span><span class="lg off"></span>offline (letzte Position)</span>
-    <span>Norden ist oben (−Z)</span>
-    <span>Rechtsklick / lange tippen: Spieler dorthin teleportieren</span>
+    <span><span class="lg off"></span>{tr("offline (letzte Position)")}</span>
+    <span>{tr("Norden ist oben (−Z)")}</span>
+    {#if session.operator}<span>{tr("Rechtsklick / lange tippen: Spieler dorthin teleportieren")}</span>{/if}
   </div>
 </div>
 

@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { session } from "../lib/session.svelte";
+  import MinecraftIcon from "./MinecraftIcon.svelte";
+  import LanguagePicker from "./LanguagePicker.svelte";
+  import { t as tr } from "../lib/i18n.svelte";
   import { api } from "../lib/api";
   import { ago, time } from "../lib/format";
   import { live } from "../lib/live.svelte";
@@ -60,49 +64,53 @@
 
   <div class="status {conn.cls}" role="status" aria-live="polite">
     <span class="light"></span>
-    <span class="label">{conn.label}</span>
+    <span class="label">{tr(conn.label)}</span>
     {#if s?.message && (conn.cls === "error")}<span class="msg">{s.message}</span>{/if}
   </div>
 
   <div class="meta">
-    <span class:stale title={s?.lastUpdate ? `Letzte Aktualisierung ${time(s.lastUpdate)}` : ""}>
+    <span class:stale title={s?.lastUpdate ? tr("Letzte Aktualisierung {time}", { time: time(s.lastUpdate) }) : ""}>
       {#if s?.paused}
-        pausiert {s.pausedSince ? ago(s.pausedSince, live.now) : ""}
+        {tr("pausiert")} {s.pausedSince ? ago(s.pausedSince, live.now) : ""}
       {:else}
-        Stand {s?.lastUpdate ? time(s.lastUpdate) : "–"}
+        {tr("Stand")} {s?.lastUpdate ? time(s.lastUpdate) : "–"}
       {/if}
     </span>
     {#if s?.online !== null && s?.online !== undefined}
-      <span title="Spieler online">👤 {s.online}/{s.maxPlayers ?? "?"}</span>
+      <span title={tr("Spieler online")}><MinecraftIcon item="minecraft:player_head" size={16} /> {s.online}/{s.maxPlayers ?? "?"}</span>
     {/if}
-    {#if tps !== null}<span title="TPS (letzte Minute)">TPS <b style:color={tpsColor(tps)}>{tps.toFixed(1)}</b></span>{/if}
-    {#if mspt !== null}<span title="MSPT (Durchschnitt 5 s)">MSPT <b style:color={msptColor(mspt)}>{mspt.toFixed(1)}</b></span>{/if}
+    {#if tps !== null}<span title={tr("TPS (letzte Minute)")}>TPS <b style:color={tpsColor(tps)}>{tps.toFixed(1)}</b></span>{/if}
+    {#if mspt !== null}<span title={tr("MSPT (Durchschnitt 5 s)")}>MSPT <b style:color={msptColor(mspt)}>{mspt.toFixed(1)}</b></span>{/if}
   </div>
 
   <div class="actions">
+    <span class="muted">{session.user?.username} · {tr(session.operator ? "Operator" : "Betrachter")}</span>
+    <LanguagePicker />
+    {#if session.operator}
     <button
       class="btn pause"
       class:paused={s?.paused}
       onclick={togglePause}
       disabled={busy || !s}
       aria-pressed={s?.paused ?? false}
-      title={s?.paused ? "Automatische Abfragen fortsetzen" : "Alle automatischen RCON-Abfragen pausieren"}
+      title={s?.paused ? tr("Automatische Abfragen fortsetzen") : tr("Alle automatischen RCON-Abfragen pausieren")}
     >
-      {s?.paused ? "▶ Fortsetzen" : "⏸ Pausieren"}
+      {s?.paused ? tr("▶ Fortsetzen") : tr("⏸ Pausieren")}
     </button>
-    <button class="btn small ghost" onclick={logout} title="Abmelden">Abmelden</button>
+    {/if}
+    <button class="btn small ghost" onclick={logout} title={tr("Abmelden")}>{tr("Abmelden")}</button>
   </div>
 </header>
 {#if s?.paused}
   <div class="banner paused">
-    Automatische Abfragen sind pausiert. Online-Zeiten werden in dieser Zeit als „unbekannt“ gespeichert. Die Konsole funktioniert weiter.
+    {tr("Automatische Abfragen sind pausiert. Online-Zeiten werden in dieser Zeit als „unbekannt“ gespeichert. Die Konsole funktioniert weiter.")}
   </div>
 {:else if conn.cls === "error"}
   <div class="banner error">
-    {conn.label}{s?.message ? `: ${s.message}` : ""}. Es wird automatisch neu verbunden. Angezeigt wird der letzte bekannte Stand.
+    {tr(conn.label)}{s?.message ? `: ${s.message}` : ""}{tr(". Es wird automatisch neu verbunden. Angezeigt wird der letzte bekannte Stand.")}
   </div>
 {:else if stale}
-  <div class="banner warn">Die letzte erfolgreiche Aktualisierung ist {ago(s?.lastUpdate, live.now)} her.</div>
+  <div class="banner warn">{tr("Letzte Aktualisierung {time}", { time: ago(s?.lastUpdate, live.now) })}</div>
 {/if}
 
 <style>

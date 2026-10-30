@@ -52,6 +52,14 @@ describe("Items aus 26.3-Truhe", () => {
     expect(s.glint).toBe(true);
   });
 
+  it("marks only ID-derived names as localizable", () => {
+    expect(bySlot(0).nameIsDefault).not.toBe(true); // Excalibur
+    expect(bySlot(1).nameIsDefault).toBe(true); // ordinary cobblestone
+    expect(bySlot(17).nameIsDefault).not.toBe(true); // item_name override
+    expect(bySlot(5).nameIsDefault).not.toBe(true); // book title
+    expect(bySlot(6).nameIsDefault).not.toBe(true); // player head
+  });
+
   it("Stapel", () => {
     expect(bySlot(1)).toMatchObject({ id: "minecraft:cobblestone", count: 64 });
   });
@@ -75,6 +83,10 @@ describe("Items aus 26.3-Truhe", () => {
     expect(name(bySlot(5))).toBe("Tagebuch");
     expect(bySlot(5).details).toEqual(expect.arrayContaining(["von Johan", "2 Seiten"]));
     expect(name(bySlot(6))).toBe("Notch's Head");
+    expect(bySlot(5).detailMessages).toEqual(expect.arrayContaining([
+      { key: "von {author}", params: { author: "Johan" } },
+      { key: "{count} Seiten", params: { count: 2 } },
+    ]));
   });
 
   it("Lederrüstung gefärbt mit Besatz, Bogen unzerbrechlich", () => {

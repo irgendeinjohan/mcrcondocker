@@ -1,6 +1,7 @@
 // Aktionen aus dem Dashboard (Spielmodus, Teleport, Items, Welt, Nachrichten …).
 // Jede Aktion wird hier geprüft und in feste RCON-Befehle übersetzt – das Frontend
 // schickt nie eigene Befehlstexte. Alles landet im Aktionsprotokoll.
+import { translate, type Locale } from "../shared/translations.js";
 import { EventEmitter } from "node:events";
 import { GAMERULES } from "../shared/gamerules.js";
 import type {
@@ -92,8 +93,9 @@ function quoted(text: string): string {
 }
 
 /** Übersetzt eine Aktion in Befehle. Wirft ActionError bei ungültigen Eingaben. */
-export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
+export function buildAction(raw: unknown, ctx: ActionContext, locale: Locale = "de"): BuiltAction {
   if (!raw || typeof raw !== "object") throw new ActionError("Aktion erwartet");
+  const t = (key: string, params: Record<string, string | number> = {}) => translate(locale, key, params);
   const a = raw as ActionRequest & Record<string, unknown>;
   const who = (uuid: string) => ctx.nameOf(uuid) ?? uuid;
   const nameFor = (uuid: string) => {
@@ -106,28 +108,28 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
     case "gamemode": {
       const uuid = uuidOf(a.uuid);
       if (!(a.mode in GAME_MODE_LABELS)) throw new ActionError("Ungültiger Spielmodus");
-      return { label: `Spielmodus von ${who(uuid)} → ${GAME_MODE_LABELS[a.mode]}`, commands: [asPlayer(uuid, `gamemode ${a.mode} @s`)], confirm: null };
+      return { label: t("Spielmodus von {player} → {mode}", { player: who(uuid), mode: t(GAME_MODE_LABELS[a.mode]!) }), commands: [asPlayer(uuid, `gamemode ${a.mode} @s`)], confirm: null };
     }
     case "heal": {
       const uuid = uuidOf(a.uuid);
       // Sofortheilung Stufe 11 heilt weit mehr als jedes Maximum
-      return { label: `${who(uuid)} geheilt`, commands: [`effect give ${uuid} minecraft:instant_health 1 10 true`], confirm: null };
+      return { label: t("{player} geheilt", { player: who(uuid) }), commands: [`effect give ${uuid} minecraft:instant_health 1 10 true`], confirm: null };
     }
     case "feed": {
       const uuid = uuidOf(a.uuid);
-      return { label: `${who(uuid)} gesättigt`, commands: [`effect give ${uuid} minecraft:saturation 1 20 true`], confirm: null };
+      return { label: t("{player} gesättigt", { player: who(uuid) }), commands: [`effect give ${uuid} minecraft:saturation 1 20 true`], confirm: null };
     }
     case "tp_player": {
       const uuid = uuidOf(a.uuid);
       const target = uuidOf(a.target, "target");
       if (uuid === target) throw new ActionError("Spieler und Ziel sind gleich");
-      return { label: `${who(uuid)} → ${who(target)} teleportiert`, commands: [`tp ${uuid} ${target}`], confirm: null };
+      return { label: t("{player} → {target} teleportiert", { player: who(uuid), target: who(target) }), commands: [`tp ${uuid} ${target}`], confirm: null };
     }
     case "tp_coords": {
       const uuid = uuidOf(a.uuid);
       const dim = dimOf(a.dimension);
       const [x, y, z] = [coordOf(a.x, "x"), coordOf(a.y, "y"), coordOf(a.z, "z")];
-      return { label: `${who(uuid)} → ${x} / ${y} / ${z} (${dim.replace("minecraft:", "")}) teleportiert`, commands: [`execute in ${dim} run tp ${uuid} ${x} ${y} ${z}`], confirm: null };
+      return { label: t("{player} → {target} teleportiert", { player: who(uuid), target: `${x} / ${y} / ${z} (${dim.replace("minecraft:", "")})` }), commands: [`execute in ${dim} run tp ${uuid} ${x} ${y} ${z}`], confirm: null };
     }
     case "tp_surface": {
       const uuid = uuidOf(a.uuid);
@@ -140,7 +142,7 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
       }
       // spreadplayers sucht den höchsten sicheren Block (mit "under" unterhalb einer Höhe, z. B. im Nether)
       return {
-        label: `${who(uuid)} → ${Math.floor(x)} / ${Math.floor(z)} (${dim.replace("minecraft:", "")}) teleportiert`,
+        label: t("{player} → {target} teleportiert", { player: who(uuid), target: `${Math.floor(x)} / ${Math.floor(z)} (${dim.replace("minecraft:", "")})` }),
         commands: [`execute in ${dim} run spreadplayers ${x} ${z} 0 1${under} false ${uuid}`],
         confirm: null,
       };
@@ -151,53 +153,53 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
       const count = a.count;
       if (typeof count !== "number" || !Number.isInteger(count) || count < 1 || count > 6400) throw new ActionError("Anzahl muss zwischen 1 und 6400 liegen");
       const item = a.item.includes(":") ? a.item : `minecraft:${a.item}`;
-      return { label: `${who(uuid)} erhält ${count}× ${item.replace("minecraft:", "")}`, commands: [asPlayer(uuid, `give @s ${item} ${count}`)], confirm: null };
+      return { label: t("{player} erhält {count}× {item}", { player: who(uuid), count, item: item.replace("minecraft:", "") }), commands: [asPlayer(uuid, `give @s ${item} ${count}`)], confirm: null };
     }
     case "clear": {
       const uuid = uuidOf(a.uuid);
-      return { label: `Inventar von ${who(uuid)} geleert`, commands: [asPlayer(uuid, "clear @s")], confirm: `Das komplette Inventar von ${who(uuid)} wird gelöscht.` };
+      return { label: t("Inventar von {player} geleert", { player: who(uuid) }), commands: [asPlayer(uuid, "clear @s")], confirm: t("Das komplette Inventar von {player} wird gelöscht.", { player: who(uuid) }) };
     }
     case "kick": {
       const uuid = uuidOf(a.uuid);
       const reason = textOf(a.reason, "Grund", false);
-      return { label: `${who(uuid)} gekickt${reason ? ` (${reason})` : ""}`, commands: [asPlayer(uuid, `kick @s${reason ? " " + reason : ""}`)], confirm: `${who(uuid)} wird vom Server geworfen.` };
+      return { label: t("{player} gekickt{reason}", { player: who(uuid), reason: reason ? ` (${reason})` : "" }), commands: [asPlayer(uuid, `kick @s${reason ? " " + reason : ""}`)], confirm: t("{player} wird vom Server geworfen.", { player: who(uuid) }) };
     }
     case "ban": {
       const uuid = uuidOf(a.uuid);
       const name = nameFor(uuid);
       const reason = textOf(a.reason, "Grund", false);
-      return { label: `${name} gebannt${reason ? ` (${reason})` : ""}`, commands: [`ban ${name}${reason ? " " + reason : ""}`], confirm: `${name} wird gebannt und kann den Server nicht mehr betreten.` };
+      return { label: t("{player} gebannt{reason}", { player: name, reason: reason ? ` (${reason})` : "" }), commands: [`ban ${name}${reason ? " " + reason : ""}`], confirm: t("{player} wird gebannt und kann den Server nicht mehr betreten.", { player: name }) };
     }
     case "op": {
       const name = nameFor(uuidOf(a.uuid));
-      return { label: `${name} ist jetzt Operator`, commands: [`op ${name}`], confirm: `${name} erhält Operator-Rechte (alle Befehle).` };
+      return { label: t("{player} ist jetzt Operator", { player: name }), commands: [`op ${name}`], confirm: t("{player} erhält Operator-Rechte (alle Befehle).", { player: name }) };
     }
     case "deop": {
       const name = nameFor(uuidOf(a.uuid));
-      return { label: `${name} ist kein Operator mehr`, commands: [`deop ${name}`], confirm: `${name} verliert die Operator-Rechte.` };
+      return { label: t("{player} ist kein Operator mehr", { player: name }), commands: [`deop ${name}`], confirm: t("{player} verliert die Operator-Rechte.", { player: name }) };
     }
     case "pardon": {
       if (typeof a.name !== "string" || !NAME_RE.test(a.name)) throw new ActionError("Ungültiger Name");
-      return { label: `${a.name} entbannt`, commands: [`pardon ${a.name}`], confirm: null };
+      return { label: t("{player} entbannt", { player: a.name }), commands: [`pardon ${a.name}`], confirm: null };
     }
     case "pardon_ip": {
       if (typeof a.ip !== "string" || !IP_RE.test(a.ip)) throw new ActionError("Ungültige IP-Adresse");
-      return { label: `IP ${a.ip} entbannt`, commands: [`pardon-ip ${a.ip}`], confirm: null };
+      return { label: t("IP {ip} entbannt", { ip: a.ip }), commands: [`pardon-ip ${a.ip}`], confirm: null };
     }
     case "time": {
       const p = TIME_PRESETS[a.preset as TimePreset];
       if (!p) throw new ActionError("Ungültige Uhrzeit");
-      return { label: `Uhrzeit → ${p.label}`, commands: [`time set ${p.ticks}`], confirm: null };
+      return { label: t("Uhrzeit → {time}", { time: t(p.label) }), commands: [`time set ${p.ticks}`], confirm: null };
     }
     case "weather": {
       const l = WEATHER_LABELS[a.weather as WeatherKind];
       if (!l) throw new ActionError("Ungültiges Wetter");
-      return { label: `Wetter → ${l}`, commands: [`weather ${a.weather}`], confirm: null };
+      return { label: t("Wetter → {weather}", { weather: t(l) }), commands: [`weather ${a.weather}`], confirm: null };
     }
     case "difficulty": {
       const l = DIFFICULTY_LABELS[a.difficulty as Difficulty];
       if (!l) throw new ActionError("Ungültige Schwierigkeit");
-      return { label: `Schwierigkeit → ${l}`, commands: [`difficulty ${a.difficulty}`], confirm: `Die Schwierigkeit wird für alle Spieler auf „${l}“ gesetzt.` };
+      return { label: t("Schwierigkeit → {difficulty}", { difficulty: t(l) }), commands: [`difficulty ${a.difficulty}`], confirm: t("Die Schwierigkeit wird für alle Spieler auf „{difficulty}“ gesetzt.", { difficulty: t(l) }) };
     }
     case "gamerule": {
       const def = GAMERULES.find((g) => g.names.includes(a.rule as string));
@@ -207,11 +209,11 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
         throw new ActionError("Wert muss an/aus oder eine ganze Zahl sein");
       }
       const shown = typeof v === "boolean" ? (v ? "an" : "aus") : String(v);
-      return { label: `Gamerule ${def.label} → ${shown}`, commands: [`gamerule ${a.rule} ${v}`], confirm: `„${def.label}“ wird für die ganze Welt auf ${shown} gesetzt.` };
+      return { label: t("Gamerule {rule} → {value}", { rule: t(def.label), value: t(shown) }), commands: [`gamerule ${a.rule} ${v}`], confirm: t("„{rule}“ wird für die ganze Welt auf {value} gesetzt.", { rule: t(def.label), value: t(shown) }) };
     }
     case "say": {
       const text = textOf(a.text, "Nachricht", true);
-      return { label: `Nachricht an alle: ${text}`, commands: [`say ${text}`], confirm: null };
+      return { label: t("Nachricht an alle: {text}", { text }), commands: [`say ${text}`], confirm: null };
     }
     case "title": {
       const text = textOf(a.text, "Titel", true);
@@ -220,13 +222,13 @@ export function buildAction(raw: unknown, ctx: ActionContext): BuiltAction {
       // Untertitel muss vor dem Titel gesetzt werden, angezeigt wird erst mit "title"
       if (sub) cmds.push(`title @a subtitle ${quoted(sub)}`);
       cmds.push(`title @a title ${quoted(text)}`);
-      return { label: `Titel an alle: ${text}${sub ? ` / ${sub}` : ""}`, commands: cmds, confirm: null };
+      return { label: t("Titel an alle: {text}{subtitle}", { text, subtitle: sub ? ` / ${sub}` : "" }), commands: cmds, confirm: null };
     }
     case "msg": {
       // msg per Name: über "execute as" wäre der Spieler selbst der Absender
       const name = nameFor(uuidOf(a.uuid));
       const text = textOf(a.text, "Nachricht", true);
-      return { label: `Nachricht an ${name}: ${text}`, commands: [`msg ${name} ${text}`], confirm: null };
+      return { label: t("Nachricht an {player}: {text}", { player: name, text }), commands: [`msg ${name} ${text}`], confirm: null };
     }
     default:
       throw new ActionError("Unbekannte Aktion");
@@ -251,8 +253,8 @@ export class ActionService extends EventEmitter {
     super();
   }
 
-  async run(raw: unknown, confirmed: boolean): Promise<ActionOutcome> {
-    const built = buildAction(raw, this.ctx);
+  async run(raw: unknown, confirmed: boolean, locale: Locale = "de", actor?: string): Promise<ActionOutcome> {
+    const built = buildAction(raw, this.ctx, locale);
     if (built.confirm && !confirmed) return { kind: "needs_confirmation", reason: built.confirm, label: built.label };
     const outputs: string[] = [];
     let ok = true;
@@ -269,13 +271,13 @@ export class ActionService extends EventEmitter {
       if (!ok) break;
     }
     const output = outputs.filter(Boolean).join("\n");
-    this.audit("action", built.label, built.commands.join("\n"), ok, output);
+    this.audit("action", built.label, built.commands.join("\n"), ok, output, actor);
     return { kind: "done", result: { ok, label: built.label, commands: built.commands, output } };
   }
 
   /** Eintrag ins Aktionsprotokoll (auch für Konsolenbefehle) */
-  audit(source: AuditEntry["source"], label: string, command: string, ok: boolean, output: string): void {
-    const entry = this.repo.addAudit({ at: Date.now(), source, label, command, ok, output: output.slice(0, OUTPUT_LIMIT) });
+  audit(source: AuditEntry["source"], label: string, command: string, ok: boolean, output: string, actor?: string): void {
+    const entry = this.repo.addAudit({ at: Date.now(), source, label, command, ok, output: output.slice(0, OUTPUT_LIMIT), actor: actor ?? null });
     this.emit("event", { type: "audit", entry } satisfies LiveEvent);
   }
 

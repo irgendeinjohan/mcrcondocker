@@ -1,4 +1,6 @@
 // Gemeinsame Typen für Backend und Frontend.
+import type { ItemAppearance } from "./appearance.js";
+import type { DiagnosticMessage } from "./diagnostic-messages.js";
 import type { TextSegment } from "./mctext.js";
 
 export type { TextSegment };
@@ -9,6 +11,12 @@ export interface Enchantment {
   level: number;
 }
 
+export interface ItemDetailMessage {
+  key: string;
+  params: Record<string, string | number>;
+  gameKeys?: Record<string, string>;
+}
+
 export interface Item {
   slot: number;
   id: string;
@@ -16,6 +24,8 @@ export interface Item {
   /** Anzeigename (eigener Name, item_name, Buchtitel oder aus der ID abgeleitet) */
   name: TextSegment[];
   hasCustomName: boolean;
+  /** True only when the name is derived from the item ID; safe to localize in the browser. */
+  nameIsDefault?: boolean;
   enchantments: Enchantment[];
   storedEnchantments: Enchantment[];
   damage?: number;
@@ -28,7 +38,10 @@ export interface Item {
   containerSize?: number;
   /** weitere Tooltip-Zeilen (Trank, Färbung, Rüstungsbesatz, …) */
   details: string[];
+  /** Structured equivalents of details for browser localization; raw strings stay compatible. */
+  detailMessages?: ItemDetailMessage[];
   glint?: boolean;
+  appearance?: ItemAppearance;
 }
 
 export type ArmorSlot = "head" | "chest" | "legs" | "feet";
@@ -162,6 +175,8 @@ export interface ConsoleEntry {
 export type WarningLevel = "info" | "warn" | "error";
 
 export interface DiagnosticWarning {
+  messageData?: DiagnosticMessage;
+  contextData?: DiagnosticMessage;
   key: string;
   level: WarningLevel;
   message: string;
@@ -268,6 +283,7 @@ export interface BanLists {
 }
 
 export interface AuditEntry {
+  actor?: string | null;
   id: number;
   at: number;
   source: "action" | "console";

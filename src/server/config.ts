@@ -7,6 +7,7 @@ export interface Config {
   dataDir: string;
   assetsDir: string;
   dashboardPassword: string;
+  backup: { directory: string; intervalMs: number; keep: number };
   sessionDays: number;
   cookieSecure: "auto" | boolean;
   trustProxy: boolean;
@@ -57,6 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir,
     assetsDir: path.resolve(env.ASSETS_DIR || path.join(dataDir, "assets")),
     dashboardPassword,
+    backup: { directory: path.resolve(env.BACKUP_DIR || path.join(dataDir, "backups")), intervalMs: int(env, "BACKUP_INTERVAL_HOURS", 24, 0, 8760) * 3600_000, keep: Math.floor(int(env, "BACKUP_KEEP", 7, 1, 365)) },
     sessionDays: int(env, "SESSION_DAYS", 30, 1, 365),
     cookieSecure: secureRaw === "auto" ? "auto" : bool(env, "COOKIE_SECURE", false),
     trustProxy: bool(env, "TRUST_PROXY", false),

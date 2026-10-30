@@ -57,7 +57,23 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX audit_log_at ON audit_log(at);
   `,
+  // 3: Named users; anonymous legacy login sessions cannot be assigned an identity.
+  `
+  CREATE TABLE dashboard_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('viewer', 'operator')),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+    bootstrap INTEGER NOT NULL DEFAULT 0 CHECK(bootstrap IN (0, 1))
+  );
+  DELETE FROM auth_sessions;
+  ALTER TABLE auth_sessions ADD COLUMN user_id INTEGER REFERENCES dashboard_users(id) ON DELETE CASCADE;
+  ALTER TABLE audit_log ADD COLUMN actor TEXT;
+  `,
 ];
+
+export const CURRENT_SCHEMA_VERSION = MIGRATIONS.length;
 
 export type Db = DatabaseSync;
 

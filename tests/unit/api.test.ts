@@ -43,7 +43,7 @@ beforeAll(async () => {
   rcon = new RconClient({ host: "127.0.0.1", port: mock.port, password: RCON_PW });
   poller = new Poller(rcon, repo, new SessionTracker(repo), diag, { pollIntervalMs: 60_000, perfIntervalMs: 1000, floodgatePrefix: ".", mock: false, version: "test" });
   const actions = new ActionService(rcon, repo, diag, { nameOf: (u) => poller.nameOf(u) });
-  const consoleService = new ConsoleService(rcon, diag, [], (cmd, ok, out) => actions.audit("console", cmd, cmd, ok, out));
+  const consoleService = new ConsoleService(rcon, diag, [], (cmd, ok, out, actor) => actions.audit("console", cmd, cmd, ok, out, actor));
   app = await buildApp({ config, repo, poller, console: consoleService, actions, diag, rcon, assets: new Assets("/nonexistent"), version: "test", webRoot: "/nonexistent" });
   rcon.start();
   await rcon.waitForConnected();
@@ -82,6 +82,74 @@ describe("API", () => {
     expect(sc).toMatch(/HttpOnly/);
     expect(sc).toMatch(/SameSite=Strict/);
     cookie = sc.split(";")[0]!;
+  });
+
+  it("protects BlueMap settings, validates URLs, persists changes, and isolates frame permissions", async () => {
+    expect((await app.inject({ url: "/api/settings/bluemap" })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/api/bluemap/view" })).statusCode).toBe(401);
+    const settings = (payload: unknown, headers = { ...json, cookie }) =>
+      app.inject({ method: "POST", url: "/api/settings/bluemap", headers, payload });
+    expect((await settings({ url: "javascript:alert(1)" })).statusCode).toBe(400);
+    expect((await settings({ url: "https://user:password@map.example.com/" })).statusCode).toBe(400);
+    expect((await settings({})).statusCode).toBe(400);
+    expect((await settings({ url: "https://map.example.com/" }, { ...json, cookie, origin: "https://evil.example.com" } as typeof json & { cookie: string })).statusCode).toBe(403);
+    const url = "https://map.example.com:8100/maps/?a=1&b=%22#world:0:0:0";
+    expect((await settings({ url })).json()).toEqual({ url });
+    expect(repo.getSetting("bluemap.url")).toBe(url);
+    expect((await app.inject({ url: "/api/settings/bluemap", headers: { cookie } })).json()).toEqual({ url });
+    const frame = await app.inject({ url: "/api/bluemap/view?v=1", headers: { cookie } });
+    expect(frame.statusCode).toBe(200);
+    expect(frame.headers["content-type"]).toContain("text/html");
+    expect(frame.body).toContain("a=1&amp;b=%22");
+    expect(frame.body).toContain('sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-downloads"');
+    expect(frame.headers["content-security-policy"]).toContain("frame-src https://map.example.com:8100;");
+    expect(frame.headers["content-security-policy"]).toContain("frame-ancestors 'self'");
+    expect(frame.headers["x-frame-options"]).toBe("SAMEORIGIN");
+    const dashboard = await app.inject({ url: "/api/status", headers: { cookie } });
+    expect(dashboard.headers["content-security-policy"]).toContain("frame-src 'self';");
+    expect(dashboard.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(dashboard.headers["x-frame-options"]).toBe("DENY");
+    expect((await settings({ url: null })).json()).toEqual({ url: null });
+    expect(repo.getSetting("bluemap.url")).toBeNull();
+    expect((await app.inject({ url: "/api/bluemap/view", headers: { cookie } })).statusCode).toBe(404);
+  });
+
+  it("serves language and GUI routes only to authenticated sessions", async () => {
+    expect((await app.inject({ url: "/api/translations?lang=en" })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/api/gui/food_full" })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/api/translations?lang=en", headers: { cookie } })).json()).toEqual({});
+    expect((await app.inject({ url: "/api/gui/not_a_sprite", headers: { cookie } })).statusCode).toBe(404);
+  });
+
+  it("enforces viewer permissions on every administration API and revokes changed accounts", async () => {
+    const created = await app.inject({ method: "POST", url: "/api/users", headers: { ...json, cookie }, payload: { username: "read-only", password: "viewer-password", role: "viewer" } });
+    expect(created.statusCode).toBe(201);
+    expect(created.body).not.toContain("scrypt:");
+    const login = await app.inject({ method: "POST", url: "/api/login", headers: json, payload: { username: "read-only", password: "viewer-password" } });
+    expect(login.json().user.role).toBe("viewer");
+    const viewer = String(login.headers["set-cookie"]).split(";")[0]!;
+    const headers = { ...json, cookie: viewer };
+    expect((await app.inject({ url: "/api/session", headers })).json().user.username).toBe("read-only");
+    for (const url of ["/api/status", "/api/players", "/api/sessions", "/api/settings/bluemap", "/api/assets"]) expect((await app.inject({ url, headers })).statusCode, url).toBe(200);
+    for (const url of ["/api/console", "/api/debug", "/api/debug/export", "/api/audit", "/api/users", "/api/backups", "/api/world", "/api/bans"]) expect((await app.inject({ url, headers })).statusCode, url).toBe(403);
+    const sent = rcon.sentCount;
+    for (const url of ["/api/action", "/api/console", "/api/pause", "/api/settings/bluemap", "/api/world/spawn", "/api/debug/clear-warnings", "/api/users", "/api/backups"]) {
+      expect((await app.inject({ method: "POST", url, headers, payload: {} })).statusCode, url).toBe(403);
+    }
+    expect(rcon.sentCount).toBe(sent);
+    await app.inject({ method: "PATCH", url: `/api/users/${created.json().id}`, headers: { ...json, cookie }, payload: { role: "viewer", enabled: false } });
+    expect((await app.inject({ url: "/api/status", headers })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/api/audit", headers: { cookie } })).json().some((entry: { actor: string }) => entry.actor === "admin")).toBe(true);
+  });
+
+  it("keeps liveness independent from readiness", async () => {
+    expect((await app.inject({ url: "/healthz" })).statusCode).toBe(200);
+    expect((await app.inject({ url: "/readyz" })).statusCode).toBe(200);
+    poller.setPaused(true);
+    expect((await app.inject({ url: "/readyz" })).statusCode).toBe(503);
+    expect((await app.inject({ url: "/healthz" })).statusCode).toBe(200);
+    poller.setPaused(false);
+    await poller.cycle();
   });
 
   it("Status und Spieler", async () => {
@@ -191,6 +259,15 @@ describe("Aktionen, Welt, Bann-Liste, Protokoll", () => {
     expect(r.json()).toMatchObject({ ok: true, label: "Spielmodus von Alex → Kreativ", commands: [`execute as ${alex} run gamemode creative @s`] });
     expect(mock().gameMode).toBe(1);
     await act({ type: "gamemode", uuid: alex, mode: "survival" });
+  });
+
+  it("returns English action labels and confirmations when requested", async () => {
+    const headers = { ...json, cookie, "accept-language": "en" };
+    const result = await app.inject({ method: "POST", url: "/api/action", headers, payload: { action: { type: "heal", uuid: alex } } });
+    expect(result.json()).toMatchObject({ ok: true, label: "Healed Alex" });
+    const confirmation = await app.inject({ method: "POST", url: "/api/action", headers, payload: { action: { type: "clear", uuid: alex } } });
+    expect(confirmation.statusCode).toBe(409);
+    expect(confirmation.json()).toMatchObject({ needsConfirmation: true, reason: "The entire inventory of Alex will be deleted." });
   });
 
   it("Heilen, Teleport zu Spieler und Koordinaten, Oberfläche (Karte)", async () => {

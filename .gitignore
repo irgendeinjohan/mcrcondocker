@@ -9,3 +9,14 @@ coverage/
 /test-results/
 /playwright-report/
 data-mock/
+
+# Downloaded Minecraft assets (npm run assets:download)
+game-assets/
+
+# SQLite backups and restore-check databases contain private account/session data.
+backups/
+*.sqlite
+*.db
+*.db-wal
+*.db-shm
+*.partial

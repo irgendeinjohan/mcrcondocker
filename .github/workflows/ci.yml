@@ -4,6 +4,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -21,3 +22,12 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - uses: actions/cache@v4
+        id: game-assets
+        with:
+          path: game-assets
+          key: game-assets-${{ runner.os }}-${{ hashFiles('scripts/download-assets.ts', 'scripts/download-models.ts') }}
+      - run: npm run assets:download && npm run assets:models
+        if: steps.game-assets.outputs.cache-hit != 'true'
+      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - run: npm run test:smoke

@@ -20,7 +20,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.16"
   },
   "scripts": {
     "dev": "concurrently -k -n server,web \"npm:dev:server\" \"npm:dev:web\"",
@@ -33,17 +33,23 @@
     "start": "node --disable-warning=ExperimentalWarning dist/server/index.js",
     "test": "vitest run",
     "check": "tsc -p tsconfig.server.json --noEmit && svelte-check --tsconfig ./tsconfig.web.json",
-    "capture": "tsx scripts/capture-fixtures.ts"
+    "capture": "tsx scripts/capture-fixtures.ts",
+    "assets:download": "tsx scripts/download-assets.ts",
+    "test:smoke": "tsx scripts/smoke.ts",
+    "backup": "tsx scripts/backup.ts",
+    "assets:models": "tsx scripts/download-models.ts"
   },
   "dependencies": {
     "@fastify/static": "^10.1.6",
-    "fastify": "^5.12.7"
+    "fastify": "^5.12.7",
+    "three": "0.162.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^24.0.0",
+    "@types/three": "0.162.0",
     "concurrently": "^9.0.0",
-    "playwright-core": "^1.56.1",
+    "playwright-core": "1.56.1",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.7",
     "tsx": "^4.23.15",

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
   import { live } from "../lib/live.svelte";
   import { router } from "../lib/router.svelte";
   import PlayerCard from "./PlayerCard.svelte";
@@ -15,18 +16,18 @@
 
 <div class="layout" class:has-detail={!!selected}>
   <aside class="list">
-    <input class="search" type="search" placeholder="Spieler suchen …" bind:value={filter} />
+    <input class="search" type="search" placeholder={tr("Spieler suchen …")} bind:value={filter} />
     {#if live.players.length === 0}
-      <div class="panel muted">Noch keine Spieler gesehen.</div>
+      <div class="panel muted">{tr("Noch keine Spieler gesehen.")}</div>
     {/if}
     {#if online.length}
-      <h3>Online ({online.length})</h3>
+      <h3>{tr("Online (")}{online.length})</h3>
       {#each online as p (p.uuid)}
         <PlayerCard {p} active={p.uuid === selected} onselect={() => router.go("players", p.uuid)} />
       {/each}
     {/if}
     {#if offline.length}
-      <h3>Offline ({offline.length})</h3>
+      <h3>{tr("Offline (")}{offline.length})</h3>
       {#each offline as p (p.uuid)}
         <PlayerCard {p} active={p.uuid === selected} onselect={() => router.go("players", p.uuid)} />
       {/each}
@@ -38,7 +39,7 @@
         <PlayerDetail uuid={selected} onback={() => router.go("players")} />
       {/key}
     {:else}
-      <div class="panel muted hint">Wähle links einen Spieler aus, um Position, Werte und Inventar zu sehen.</div>
+      <div class="panel muted hint">{tr("Wähle links einen Spieler aus, um Position, Werte und Inventar zu sehen.")}</div>
     {/if}
   </section>
 </div>

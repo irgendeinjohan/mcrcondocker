@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { session } from "./lib/session.svelte";
+  import UsersView from "./components/UsersView.svelte";
+  import { t as tr } from "./lib/i18n.svelte";
+  import { language } from "./lib/i18n.svelte";
   import { onMount } from "svelte";
   import { api, setUnauthorizedHandler } from "./lib/api";
   import { live } from "./lib/live.svelte";
@@ -16,11 +20,14 @@
   import TopBar from "./components/TopBar.svelte";
   import WorldView from "./components/WorldView.svelte";
 
+  $effect(() => { document.documentElement.lang = language.locale; });
+
   let auth = $state<"unknown" | "in" | "out">("unknown");
   let mock = $state(false);
 
   function loggedOut() {
     live.stop();
+    session.user = null;
     auth = "out";
   }
 
@@ -28,6 +35,7 @@
     try {
       const s = await api.session();
       mock = s.mock;
+      session.user = s.user;
       auth = s.authenticated ? "in" : "out";
     } catch {
       auth = "out";
@@ -50,6 +58,15 @@
     if (auth === "in") live.start();
   });
 
+  $effect(() => {
+    if (auth !== "in") return;
+    const locale = language.locale;
+    let current = true;
+    live.translations = {};
+    api.translations(locale).then((catalog) => { if (current) live.translations = catalog; }).catch(() => {});
+    return () => { current = false; };
+  });
+
   // Tooltip beim Seitenwechsel schließen
   $effect(() => {
     void router.view;
@@ -59,9 +76,9 @@
 </script>
 
 {#if auth === "unknown"}
-  <div class="loading muted">Lade …</div>
+  <div class="loading muted">{tr("Lade …")}</div>
 {:else if auth === "out"}
-  <Login {mock} onlogin={() => (auth = "in")} />
+  <Login {mock} onlogin={(user) => { session.user = user; auth = "in"; }} />
 {:else}
   <TopBar onlogout={loggedOut} />
   <Nav onlogout={logout} />
@@ -70,14 +87,16 @@
       <PlayersView />
     {:else if router.view === "map"}
       <MapView />
-    {:else if router.view === "world"}
+    {:else if router.view === "world" && session.operator}
       <WorldView />
-    {:else if router.view === "console"}
+    {:else if router.view === "console" && session.operator}
       <ConsoleView />
     {:else if router.view === "sessions"}
       <SessionsView />
-    {:else if router.view === "debug"}
+    {:else if router.view === "debug" && session.operator}
       <DebugView />
+    {:else if router.view === "users" && session.operator}
+      <UsersView />
     {/if}
   </main>
   <ItemTooltip />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
   import { router } from "../lib/router.svelte";
   import AuditLog from "./world/AuditLog.svelte";
   import BansPanel from "./world/BansPanel.svelte";
@@ -18,7 +19,7 @@
   <div class="tabs" role="tablist">
     {#each tabs as t (t.id)}
       <button role="tab" class="tab" class:active={tab === t.id} aria-selected={tab === t.id} onclick={() => router.go("world", t.id)}>
-        {t.label}
+        {tr(t.label)}
       </button>
     {/each}
   </div>

@@ -1,5 +1,11 @@
 // HTTP-Server: REST-API, Server-Sent Events, statisches Frontend.
-import { existsSync } from "node:fs";
+import { resolveLocale, translate } from "../shared/translations.js";
+import { normalizeBlueMapUrl } from "../shared/bluemap.js";
+import type { DashboardUser } from "../shared/users.js";
+import { readiness } from "../shared/readiness.js";
+import { RenderAssets } from "./render-assets.js";
+import { Backups } from "./backups.js";
+import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fastifyStatic from "@fastify/static";
@@ -15,6 +21,8 @@ import type { Diagnostics } from "./parse/diagnostics.js";
 import type { Poller } from "./poller.js";
 import type { RconClient } from "./rcon/client.js";
 
+declare module "fastify" { interface FastifyRequest { user: DashboardUser | null } }
+
 export interface AppDeps {
   config: Config;
   repo: Repo;
@@ -26,6 +34,8 @@ export interface AppDeps {
   assets: Assets;
   version: string;
   webRoot?: string;
+  backups?: Backups;
+  renderAssets?: RenderAssets;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -47,18 +57,36 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     trustProxy: config.trustProxy,
     bodyLimit: 64 * 1024,
   });
+  app.decorateRequest("user", null);
+  const renderAssets = deps.renderAssets;
+  app.get("/api/render/index", async () => renderAssets?.info() ?? { enabled: false, version: "26.3", revision: "none", files: [], custom: false, skins: [] });
+  app.get<{ Querystring: { path?: string } }>("/api/render/file", async (req, reply) => {
+    const file = typeof req.query.path === "string" ? req.query.path : "";
+    const content = renderAssets?.read(file);
+    if (!content) return reply.code(404).send({ error: "Render asset not found" });
+    return reply.type(file.endsWith(".png") ? "image/png" : "application/json").send(content);
+  });
+  app.get<{ Params: { hash: string } }>("/api/skin/:hash", async (req, reply) => {
+    const skin = renderAssets?.skin(req.params.hash);
+    if (!skin) return reply.code(404).send({ error: "Skin not installed" });
+    return reply.type("image/png").send(skin);
+  });
   const auth = new Auth(config.dashboardPassword, repo, config.sessionDays);
   const isSecure = (req: FastifyRequest) => (config.cookieSecure === "auto" ? req.protocol === "https" : config.cookieSecure);
   const token = (req: FastifyRequest) => parseCookies(req.headers.cookie)[COOKIE_NAME];
+
+  const blueMapUrl = () => normalizeBlueMapUrl(repo.getSetting("bluemap.url"));
 
   // Sicherheits-Header
   app.addHook("onSend", async (req, reply, payload) => {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "no-referrer");
-    reply.header("X-Frame-Options", "DENY");
+    const isMapFrame = req.url.split("?")[0] === "/api/bluemap/view";
+    reply.header("X-Frame-Options", isMapFrame ? "SAMEORIGIN" : "DENY");
+    const frameOrigin = isMapFrame && blueMapUrl() ? new URL(blueMapUrl()!).origin : "'self'";
     reply.header(
       "Content-Security-Policy",
-      "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; worker-src 'self'",
+      `default-src 'self'; frame-src ${frameOrigin}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors ${isMapFrame ? "'self'" : "'none'"}; base-uri 'self'; form-action 'self'; manifest-src 'self'; worker-src 'self'`,
     );
     if (req.url.startsWith("/api/")) reply.header("Cache-Control", "no-store");
     return payload;
@@ -73,42 +101,114 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       const ct = req.headers["content-type"] ?? "";
       if (!ct.startsWith("application/json")) return reply.code(415).send({ error: "JSON erwartet" });
       const origin = req.headers.origin;
-      if (origin && req.headers.host && new URL(origin).host !== req.headers.host) {
-        return reply.code(403).send({ error: "Fremde Herkunft" });
+      if (origin && req.headers.host) {
+        try { if (new URL(origin).host !== req.headers.host) return reply.code(403).send({ error: "Fremde Herkunft" }); }
+        catch { return reply.code(403).send({ error: "Fremde Herkunft" }); }
       }
     }
     if (PUBLIC.has(url)) return;
-    if (!auth.validSession(token(req))) return reply.code(401).send({ error: "Nicht angemeldet" });
+    req.user = auth.sessionUser(token(req));
+    if (!req.user) return reply.code(401).send({ error: "Nicht angemeldet" });
+    if (req.user.role === "viewer") {
+      const readable = new Set(["/api/status", "/api/players", "/api/sessions", "/api/assets", "/api/items", "/api/translations", "/api/events", "/api/settings/bluemap", "/api/bluemap/view"]);
+      const safe = readable.has(url) || /^\/api\/(?:players|icon|gui|render|skin)\/[^/]+$/.test(url);
+      if (url !== "/api/logout" && (!(req.method === "GET" || req.method === "HEAD") || !safe)) {
+        return reply.code(403).send({ error: "Operator-Rechte erforderlich" });
+      }
+    }
   });
 
   app.get("/healthz", async () => ({ ok: true }));
+  app.get("/readyz", async (_req, reply) => {
+    const result = readiness(poller.status());
+    return reply.header("Cache-Control", "no-store").code(result.ready ? 200 : 503).send(result);
+  });
+  const backups = deps.backups ?? new Backups(repo.db, config.backup.directory, config.backup.keep);
+  app.get("/api/backups", async () => backups.list());
+  app.post("/api/backups", async (req) => {
+    const result = await backups.create();
+    deps.actions.audit("action", "SQLite backup created", "", true, result.name, req.user!.username);
+    return result;
+  });
+  app.get<{ Params: { name: string } }>("/api/backups/:name", async (req, reply) => {
+    try {
+      const file = backups.file(req.params.name);
+      if (!existsSync(file)) return reply.code(404).send({ error: "Backup nicht gefunden" });
+      return reply.type("application/octet-stream").header("Content-Disposition", `attachment; filename="${req.params.name}"`).send(createReadStream(file));
+    } catch { return reply.code(400).send({ error: "Ungültiger Backup-Name" }); }
+  });
 
   // --- Login ---------------------------------------------------------------
-  app.get("/api/session", async (req) => ({ authenticated: auth.validSession(token(req)), mock: config.mock }));
+  app.get("/api/session", async (req) => { const user = auth.sessionUser(token(req)); return { authenticated: !!user, mock: config.mock, user }; });
 
-  app.post<{ Body: { password?: unknown } }>("/api/login", async (req, reply) => {
+  app.post<{ Body: { password?: unknown; username?: unknown } }>("/api/login", async (req, reply) => {
     const ip = req.ip;
     const wait = auth.retryAfter(ip);
     if (wait > 0) {
       reply.header("Retry-After", Math.ceil(wait / 1000));
-      return reply.code(429).send({ error: `Zu viele Fehlversuche. Bitte in ${Math.ceil(wait / 60000)} Minute(n) erneut versuchen.` });
+      return reply.code(429).send({ error: translate(resolveLocale(req.headers["accept-language"] ?? "de"), "Zu viele Fehlversuche. Bitte in {minutes} Minute(n) erneut versuchen.", { minutes: Math.ceil(wait / 60000) }) });
     }
     const pw = typeof req.body?.password === "string" ? req.body.password : "";
-    if (!auth.checkPassword(pw)) {
+    const user = auth.authenticate(typeof req.body?.username === "string" ? req.body.username : "admin", pw);
+    if (!user) {
       auth.recordFailure(ip);
       await new Promise((r) => setTimeout(r, 400)); // bremst Durchprobieren zusätzlich
       return reply.code(401).send({ error: "Falsches Passwort" });
     }
     auth.recordSuccess(ip);
-    const s = auth.createSession();
+    const s = auth.createSession(user);
     reply.header("Set-Cookie", sessionCookie(s.token, s.maxAgeSeconds, isSecure(req)));
-    return { ok: true };
+    return { ok: true, user };
   });
 
   app.post("/api/logout", async (req, reply) => {
     auth.destroySession(token(req));
     reply.header("Set-Cookie", clearCookie(isSecure(req)));
     return { ok: true };
+  });
+
+  app.get("/api/users", async () => auth.listUsers());
+  app.post<{ Body: { username?: unknown; password?: unknown; role?: unknown } }>("/api/users", async (req, reply) => {
+    try {
+      const user = auth.createUser(req.body ?? {});
+      deps.actions.audit("action", `User created: ${user.username} (${user.role})`, "", true, "", req.user!.username);
+      return reply.code(201).send(user);
+    } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+  });
+  app.patch<{ Params: { id: string }; Body: { role?: unknown; enabled?: unknown; password?: unknown } }>("/api/users/:id", async (req, reply) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return reply.code(400).send({ error: "Benutzer unbekannt" });
+      const user = auth.updateUser(id, req.body ?? {}, req.user!);
+      deps.actions.audit("action", `User updated: ${user.username} (${user.role}, ${user.enabled ? "enabled" : "disabled"})`, "", true, "", req.user!.username);
+      return user;
+    } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+  });
+
+  // BlueMap settings share the dashboard's authentication and CSRF protections.
+  app.get("/api/settings/bluemap", async () => ({ url: blueMapUrl() }));
+  app.post<{ Body: { url?: unknown } }>("/api/settings/bluemap", async (req, reply) => {
+    try {
+      if (!req.body || !("url" in req.body)) return reply.code(400).send({ error: "url erwartet" });
+      const url = normalizeBlueMapUrl(req.body.url);
+      if (url && req.protocol === "https" && new URL(url).protocol !== "https:") {
+        return reply.code(400).send({ error: "Bitte für BlueMap HTTPS verwenden." });
+      }
+      repo.setSetting("bluemap.url", url);
+      deps.actions.audit("action", "BlueMap settings updated", "", true, "", req.user!.username);
+      return { url };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
+  });
+  // Isolate the configurable frame policy in a fresh same-origin document. This
+  // allows settings to change without weakening the dashboard CSP or reloading it.
+  app.get("/api/bluemap/view", async (_req, reply) => {
+    const url = blueMapUrl();
+    if (!url) return reply.code(404).send({ error: "BlueMap is not configured" });
+    const escaped = url.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+    reply.type("text/html; charset=utf-8");
+    return `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>BlueMap</title><style>html,body,iframe{width:100%;height:100%;margin:0;border:0;display:block;background:#131813}</style></head><body><iframe src="${escaped}" title="BlueMap" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-downloads"></iframe></body></html>`;
   });
 
   // --- Daten ---------------------------------------------------------------
@@ -151,6 +251,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.post<{ Body: { paused?: unknown } }>("/api/pause", async (req, reply) => {
     if (typeof req.body?.paused !== "boolean") return reply.code(400).send({ error: "paused (boolean) erwartet" });
     poller.setPaused(req.body.paused);
+    deps.actions.audit("action", req.body.paused ? "Polling paused" : "Polling resumed", "", true, "", req.user!.username);
     return poller.status();
   });
 
@@ -158,7 +259,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.post<{ Body: { command?: unknown; confirmed?: unknown } }>("/api/console", async (req, reply) => {
     if (typeof req.body?.command !== "string") return reply.code(400).send({ error: "command erwartet" });
-    const r = await deps.console.run(req.body.command, req.body.confirmed === true);
+    const r = await deps.console.run(req.body.command, req.body.confirmed === true, resolveLocale(req.headers["accept-language"] ?? "de"), req.user!.username);
     if (r.kind === "invalid") return reply.code(400).send({ error: r.message });
     if (r.kind === "needs_confirmation") return reply.code(409).send({ needsConfirmation: true, reason: r.reason });
     return r.entry;
@@ -174,7 +275,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.post<{ Body: { action?: unknown; confirmed?: unknown } }>("/api/action", async (req, reply) => {
     try {
-      const r = await actions.run(req.body?.action, req.body?.confirmed === true);
+      const r = await actions.run(req.body?.action, req.body?.confirmed === true, resolveLocale(req.headers["accept-language"] ?? "de"), req.user!.username);
       if (r.kind === "needs_confirmation") return reply.code(409).send({ needsConfirmation: true, reason: r.reason, label: r.label });
       return r.result;
     } catch (e) {
@@ -194,7 +295,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.post<{ Body: { spawn?: unknown } }>("/api/world/spawn", async (req, reply) => {
     try {
-      return { worldSpawn: actions.setWorldSpawn(req.body?.spawn ?? null) };
+      const worldSpawn = actions.setWorldSpawn(req.body?.spawn ?? null);
+      actions.audit("action", "World spawn updated", "", true, "", req.user!.username);
+      return { worldSpawn };
     } catch (e) {
       return rconFailure(reply, e);
     }
@@ -208,7 +311,13 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     }
   });
 
-  app.get("/api/items", async () => assets.items());
+  app.get<{ Querystring: { lang?: string } }>("/api/items", async (req) => assets.items(req.query.lang));
+  app.get<{ Querystring: { lang?: string } }>("/api/translations", async (req) => assets.translations(req.query.lang ?? "en"));
+  app.get<{ Params: { name: string } }>("/api/gui/:name", async (req, reply) => {
+    const png = assets.gui(req.params.name);
+    if (!png) return reply.code(404).send({ error: "No GUI sprite" });
+    return reply.type("image/png").header("Cache-Control", "private, max-age=86400").send(png);
+  });
 
   app.get<{ Querystring: { limit?: string; before?: string } }>("/api/audit", async (req) => {
     const limit = Math.min(500, Math.max(1, Number(req.query.limit ?? 200) || 200));
@@ -255,14 +364,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
-    const send = (ev: LiveEvent) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    const send = (ev: LiveEvent) => {
+      const user = auth.sessionUser(token(req));
+      if (!user) { res.end(); return; }
+      if (user.role === "viewer" && (ev.type === "console" || ev.type === "audit")) return;
+      res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    };
     res.write("retry: 3000\n\n");
     send({ type: "status", status: poller.status() });
     send({ type: "players", players: poller.summaries() });
     poller.on("event", send);
     deps.console.on("event", send);
     actions.on("event", send);
-    const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+    const ping = setInterval(() => { if (!auth.sessionUser(token(req))) res.end(); else res.write(": ping\n\n"); }, 25_000);
     req.raw.on("close", () => {
       clearInterval(ping);
       poller.off("event", send);

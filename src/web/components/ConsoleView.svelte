@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr, language } from "../lib/i18n.svelte";
   import { parseLegacy } from "../../shared/mctext";
   import { dangerousReason } from "../../shared/dangerous";
   import { api, ApiError } from "../lib/api";
@@ -49,7 +50,7 @@
       if (e instanceof ApiError && e.status === 409 && e.body.needsConfirmation) {
         confirm = { command, reason: String(e.body.reason ?? "") };
       } else {
-        live.addConsole({ id: -Date.now(), at: Date.now(), command, output: `Fehler: ${(e as Error).message}`, ok: false, durationMs: 0 });
+        live.addConsole({ id: -Date.now(), at: Date.now(), command, output: tr("Fehler: {message}", { message: (e as Error).message }), ok: false, durationMs: 0 });
       }
     } finally {
       busy = false;
@@ -65,7 +66,7 @@
     saveHistory();
     histIndex = -1;
     input = "";
-    const reason = dangerousReason(command);
+    const reason = dangerousReason(command, [], 0, language.locale);
     if (reason) {
       confirm = { command, reason };
       return;
@@ -107,21 +108,21 @@
         <button class="btn small" onclick={() => quick(c)} disabled={busy}>{c}</button>
       {/each}
     </div>
-    <label class="chk"><input type="checkbox" bind:checked={stripColors} /> Farben ausblenden</label>
+    <label class="chk"><input type="checkbox" bind:checked={stripColors} /> {tr("Farben ausblenden")}</label>
   </div>
   {#if live.status?.paused}
-    <div class="note">Automatische Abfragen sind pausiert – manuelle Befehle funktionieren trotzdem.</div>
+    <div class="note">{tr("Automatische Abfragen sind pausiert – manuelle Befehle funktionieren trotzdem.")}</div>
   {/if}
   <div class="out mono" bind:this={out} aria-live="polite">
     {#if live.console.length === 0}
-      <div class="faint">Noch keine Befehle. Ausgaben erscheinen hier.</div>
+      <div class="faint">{tr("Noch keine Befehle. Ausgaben erscheinen hier.")}</div>
     {/if}
     {#each live.console as e (e.id)}
       <div class="entry">
         <div class="cmd"><span class="faint">{time(e.at)}</span> <span class="prompt">&gt;</span> {e.command}</div>
         <div class="res" class:err={!e.ok}>
           {#if e.output === ""}
-            <span class="faint">(keine Ausgabe)</span>
+            <span class="faint">{tr("(keine Ausgabe)")}</span>
           {:else if stripColors}
             {e.output.replace(/§x(§[0-9a-fA-F]){6}|§./g, "")}
           {:else}
@@ -138,21 +139,21 @@
       bind:value={input}
       onkeydown={onKey}
       class="mono"
-      placeholder="Befehl eingeben (↑/↓ Verlauf)"
+      placeholder={tr("Befehl eingeben (↑/↓ Verlauf)")}
       autocomplete="off"
       autocapitalize="off"
       spellcheck="false"
       enterkeyhint="send"
-      aria-label="Befehl"
+      aria-label={tr("Befehl")}
     />
-    <button class="btn primary" type="submit" disabled={busy || !input.trim()}>Senden</button>
+    <button class="btn primary" type="submit" disabled={busy || !input.trim()}>{tr("Senden")}</button>
   </form>
 </div>
 
 <ConfirmDialog
   open={!!confirm}
-  title="Befehl bestätigen"
-  message={confirm ? `Dieser Befehl ist potenziell gefährlich: ${confirm.reason}. Wirklich ausführen?` : ""}
+  title={tr("Befehl bestätigen")}
+  message={confirm ? tr("Dieser Befehl ist potenziell gefährlich: {reason}. Wirklich ausführen?", { reason: confirm.reason }) : ""}
   detail={confirm ? "/" + confirm.command : ""}
   onconfirm={() => {
     const c = confirm;

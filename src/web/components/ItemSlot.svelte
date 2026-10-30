@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
+  import { itemName } from "../lib/game-text.svelte";
+  import ItemVisual from "./ItemVisual.svelte";
+  import MinecraftIcon from "./MinecraftIcon.svelte";
   import type { Item } from "../../shared/types";
   import { live } from "../lib/live.svelte";
   import { durabilityColor, materialColor, shortName } from "../lib/items";
@@ -8,7 +12,8 @@
     item,
     selected = false,
     placeholder = "",
-  }: { item: Item | null | undefined; selected?: boolean; placeholder?: string } = $props();
+    equipment,
+  }: { item: Item | null | undefined; selected?: boolean; placeholder?: string; equipment?: "head" | "chest" | "legs" | "feet" | "offhand" } = $props();
 
   let imgFailed = $state(false);
   const showImg = $derived(!!item && !!live.assets?.textures && !imgFailed);
@@ -44,7 +49,7 @@
   class="slot"
   class:selected
   class:empty={!item}
-  aria-label={item ? `${item.name.map((s) => s.text).join("")}${item.count > 1 ? `, ${item.count} Stück` : ""}` : placeholder || "leer"}
+  aria-label={item ? `${itemName(item).map((s) => s.text).join("")}${item.count > 1 ? `, ${tr("{count} Stück", { count: item.count })}` : ""}` : placeholder || tr("leer")}
   onpointerenter={onEnter}
   onpointermove={onMove}
   onpointerleave={onLeave}
@@ -52,7 +57,7 @@
 >
   {#if item}
     {#if showImg}
-      <img src={`/api/icon/${encodeURIComponent(item.id)}`} alt="" draggable="false" onerror={() => (imgFailed = true)} />
+      <ItemVisual {item} onerror={() => (imgFailed = true)} />
     {:else}
       <span class="tile" style:--c={materialColor(item.id)}>{shortName(item.id)}</span>
     {/if}
@@ -61,6 +66,8 @@
     {#if dur !== null}
       <span class="dur"><span style:width={`${Math.max(4, dur * 100)}%`} style:background={durabilityColor(dur)}></span></span>
     {/if}
+  {:else if equipment}
+    <MinecraftIcon gui={`slot_${equipment}`} size={28} />
   {:else if placeholder}
     <span class="ph">{placeholder}</span>
   {/if}
@@ -95,14 +102,6 @@
     outline: 3px solid #fff;
     outline-offset: -3px;
     z-index: 1;
-  }
-  img {
-    width: 80%;
-    height: 80%;
-    object-fit: cover;
-    object-position: top;
-    image-rendering: pixelated;
-    pointer-events: none;
   }
   .tile {
     width: 84%;

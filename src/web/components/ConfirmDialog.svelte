@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from "../lib/i18n.svelte";
   let {
     open,
     title,
@@ -30,8 +31,8 @@
   <p>{message}</p>
   {#if detail}<pre class="mono">{detail}</pre>{/if}
   <div class="actions">
-    <button class="btn" onclick={oncancel}>Abbrechen</button>
-    <button class="btn danger" onclick={onconfirm}>{confirmLabel}</button>
+    <button class="btn" onclick={oncancel}>{tr("Abbrechen")}</button>
+    <button class="btn danger" onclick={onconfirm}>{tr(confirmLabel)}</button>
   </div>
 </dialog>
 
